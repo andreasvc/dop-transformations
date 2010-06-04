@@ -107,9 +107,26 @@ As a solution to the problem of a mismatch, the notion of flattening is named. I
 
 In \cite{Po} and \cite{Po2}, synchronous grammars are extended from plain PCFGs to the DOP framework: instead of looking at rules with two right-hand sides and a corresponding set of non-terminals, we now consider pairs subtrees with identical top nodes, and corresponding non-terminal leaf nodes.
 
-These linked subtrees are then combined into a a forest of linked subtrees, which can then be used as a grammar for translations and transformations. Just like in the case of synchronous PCFGs, we can simply parse new sentences using the source `side' of the grammar, and derive the corresponding target side immediately.
+These linked subtrees are then combined into a forest of linked subtrees, which can then be used as a grammar for translations and transformations. Just like in the case of synchronous PCFGs, we can simply parse new sentences using the source `side' of the grammar, and derive the corresponding target side immediately.
 
-An important contrast with the earlier synchronous grammars for PCFGs, is that in the framework of \cite{Po}, we are not ultimately dependent on strong similarities between the tree structures on both sides. This would make translations and transformations, such as in the examples given in section 2.1, possible.
+Formally, in \cite{Po}, linked subtree pairs are defined as follows:
+
+\begin{definition}
+Given a pair of linked trees $\langle T_1, T_2 \rangle$, a \emph{linked subtree pair} consists of two connected and linked subgraphs $\langle t_1, t_2 \rangle$ such that:
+\begin{enumerate}
+\item for every pair of linked nodes in $\langle t_1, t_2 \rangle$, it holds that
+\begin{enumerate}
+\item both nodes in $\langle t_1, t_2 \rangle$ have either zero daughter nodes, or
+\item both nodes have all the daughter nodes of the corresponding node in $\langle T_1, T_2 \rangle$
+\end{enumerate}
+\item every non-linked node in either $t_1$ (or $t_2$) has all the daughter nodes of the corresponding node in $T_1$ (or $T_2$), and
+\item both $t_1$ and $t_2$ consist of more than one node.
+\end{enumerate}
+\end{definition}
+
+Then, the \emph{bag of linked subtree pairs} is defined as follows: given a corpus of linked trees $C$, the \emph{bag of linked subtree pairs} of $C$ is the bag in which linked subtree pairs occur exactly as often as they can be identified in $C$.
+
+An important contrast with the earlier synchronous grammars for PCFGs, is that in the framework of \cite{Po}, we are not necessarily dependent on strong similarities between the tree structures on both sides (although, ultimatlely, such a strong similarity may still be a prerequisite for good performance). This would make translations and transformations, such as in the examples given in section 2.1, possible.
 
 Of course, it should be noted that, in this framework, it is unlikely that \emph{all} subtrees on the source side are linked to subtrees on the target side: especially in the (far from unlikely) case where the total number of subtree differs, this has to be trivially false.
 
