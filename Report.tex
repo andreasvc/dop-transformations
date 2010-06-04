@@ -32,7 +32,11 @@ Project report, first draft
 \begin{abstract}
 In this paper, we make an investigation into Data Oriented Transformations,
 basing ourselves on the existing concepts of Data Oriented Parsing, synchronous
-grammars, and the Goodman Reduction.
+grammars, and the Goodman Reduction. The goal is to define and evaluate a general
+formalism for learning arbitrary transformations such as movement and insertions
+based on annotated data.  Parsing a sentence should result in a pair of trees
+corresponding to the original and a transformed sentence. The test case will be
+declarative versus interrogative questions.
 \end{abstract}
 
 \section{Introduction}
@@ -62,13 +66,14 @@ useful to us. In particular, these include:
 \item The Goodman-reduction, as developed by Joshua Goodman in \cite{Go}.
 \end{itemize}
 
-In section 2, these underlying frameworks (as well as their relevance to our
-project) will be explained in a somewhat more detailed fashioned; then in
-section 3, our own approach will be described more comprehensively; in section
-4, further details regarding our implementation will be given, and in section
-5, the obtained results will be presented.
+In section \ref{sec:theor}, these underlying frameworks (as well as their
+relevance to our project) will be explained in a somewhat more detailed
+fashioned; then in section \ref{sec:approach}, our own approach will be described more
+comprehensively; in section \ref{sec:implem}, further details regarding our implementation
+will be given, and in section \ref{sec:eval}, the obtained results will be presented.
 
 \section{Theoretical framework}
+\label{sec:theor}
 
 \subsection{Synchronous grammars}
 
@@ -233,6 +238,7 @@ the STSG trees with equal probability.
 \end{theorem}
 
 \section{Approach}
+\label{sec:approach}
 
 \subsection{A reduction for synchronous DOP}
 
@@ -303,10 +309,13 @@ the original synchronous DOP model.
 \end{theorem}
 
 \section{Implementation}
+\label{sec:implem}
 
-\section{Results}
+\section{Evaluation}
+\label{sec:eval}
 
 \section{Conclusions}
+\label{sec:conc}
 
 \begin{thebibliography}{BlAbLa00}
 
