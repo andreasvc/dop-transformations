@@ -107,7 +107,7 @@ As a solution to the problem of a mismatch, the notion of flattening is named. I
 
 In \cite{Po} and \cite{Po2}, synchronous grammars are extended from plain PCFGs to the DOP framework: instead of looking at rules with two right-hand sides and a corresponding set of non-terminals, we now consider pairs subtrees with identical top nodes, and corresponding non-terminal leaf nodes.
 
-These linked subtrees are then combined into a forest of linked subtrees, which can then be used as a grammar for translations and transformations. Just like in the case of synchronous PCFGs, we can simply parse new sentences using the source `side' of the grammar, and derive the corresponding target side immediately.
+These linked subtrees are then combined into a bag of linked subtree pairs, which can then be used as a grammar for translations and transformations. Just like in the case of synchronous PCFGs, we can simply parse new sentences using the source `side' of the grammar, and derive the corresponding target side immediately.
 
 Formally, in \cite{Po}, linked subtree pairs are defined as follows:
 
@@ -148,9 +148,9 @@ This construction [the Goodman-reduction] produces PCFG trees homomorphic to the
 
 \subsection{A reduction for synchronous DOP}
 
-We are now faced with the situation, that we cannot simply apply the Goodman reduction, reducing subtree pairs to PCFG rules, because of the reason that not every subtree will always be a part of a subtree pair. In particular, the PCFG-rules themselves, the `building blocks' of the Goodman reduction, may not be a part of a subtree pair. This leads us to wonder whether it is possible to, in some way or another, still perform a Goodman-like reduction on the forest of linked subtrees.
+We are now faced with the situation, that we cannot simply apply the Goodman reduction, reducing subtree pairs to PCFG rules, because of the reason that not every subtree will always be a part of a subtree pair. In particular, the PCFG-rules themselves, the `building blocks' of the Goodman reduction, may not be a part of a subtree pair. This leads us to wonder whether it is possible to, in some way or another, still perform a Goodman-like reduction on the bag of linked subtree pairs.
 
-It turns out that, indeed, a reduction is possible over the forest of linked subtrees. For this, consider the notion of a \emph{minimal linked subtree pair}:
+It turns out that, indeed, a reduction is possible over the bag of linked subtree pairs. For this, consider the notion of a \emph{minimal linked subtree pair}:
 
 \begin{definition}
 For a pair of linked trees $\langle T_1, T_2 \rangle$, a \emph{minimal linked subtree pair} is a linked subtree pair $\langle t_1, t_2 \rangle$, s.t. $t_1 \subseteq T_1$, $t_2 \subseteq T_2$, such that there is no other linked pair $\langle s_1, s_2 \rangle$ where $s_1 \subsetneq t_1$ and $s_2 \subsetneq t_2$.
@@ -161,7 +161,7 @@ Every pair of linked trees can be reconstructed from the minimal linked subtree 
 \end{theorem}
 
 \begin{proof}
-Assume that there is a pair of linked trees $\langle T_1, T_2 \rangle$ for which this is not possible, given a certain forest of linked subtree pairs. Then there has to be some linked pair of subtrees $\langle t_1, t_2 \rangle$ for which:
+Assume that there is a pair of linked trees $\langle T_1, T_2 \rangle$ for which this is not possible, given a certain bag of linked subtree pairs. Then there has to be some linked pair of subtrees $\langle t_1, t_2 \rangle$ for which:
 \begin{enumerate}
 \item It is not possible to construct $\langle t_1, t_2 \rangle$ from minimal linked subtree pairs.
 \item All pairs of subtrees $\langle s_1, s_2 \rangle \subsetneq \langle t_1, t_2 \rangle$ can be constructed from minimal subtree linked pairs.
