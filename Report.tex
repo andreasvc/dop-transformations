@@ -8,6 +8,13 @@
 \usepackage[all]{xy}
 \usepackage{parsetree}
 \usepackage{avm}
+%\usepackage{subfigure}
+%\usepackage{natbib} apa style etc.
+\usepackage{verbatim}
+\usepackage{linguex}
+\usepackage[pdftex]{graphicx}
+\usepackage[english]{babel}
+\usepackage[colorlinks=true, linkcolor=black, urlcolor=blue, pdfborder={0 0 0}]{hyperref}
 
 \newtheorem{theorem}{Theorem}[section]
 
@@ -38,6 +45,8 @@ based on annotated data.  Parsing a sentence should result in a pair of trees
 corresponding to the original and a transformed sentence. The test case will be
 declarative versus interrogative questions.
 \end{abstract}
+
+\newpage
 
 \section{Introduction}
 
@@ -93,9 +102,9 @@ translation is immediately obtained.
 
 Some problems with synchronous grammars are also mentioned in \cite{Ch}. One of
 these problems is that, in reality, tree structures often do not coincide
-between the original language and the translated language. For example, a
-common analysis of 
+between the original language and the translated language. For example:
 
+\ex. \label{johnenfr}
 \begin{tabular}{lll}
 \begin{parsetree}
 ( .S.
@@ -121,14 +130,16 @@ common analysis of
 \end{parsetree}
 \end{tabular}
 
-is problematic under the original framework of synchronous grammars, because of
-the mismatch in the tree structures.
+A common analysis of \ref{johnenfr} is problematic under the original
+framework of synchronous grammars, because of the mismatch in the tree
+structures.
 
 Similarly, when looking at transformations between declarative and
 interrogative sentences, and basing ourselves on standard analyses of the
 Stanford parser (which are made using the standards described for the Penn
 treebank), we encounter the following pairs of trees:
 
+\ex. \label{marylike}
 \begin{tabular}{lll}
 \begin{parsetree}
 ( .S.
