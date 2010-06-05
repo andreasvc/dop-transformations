@@ -1,4 +1,10 @@
 \documentclass[a4paper]{article}
+\usepackage{verbatim}
+\usepackage{linguex}
+\usepackage{array}
+\usepackage[pdftex]{graphicx}
+\usepackage[english]{babel}
+\usepackage[colorlinks=true, citecolor=black, linkcolor=black, urlcolor=blue, pdfborder={0 0 0}]{hyperref}
 \usepackage[utf8x]{inputenc}
 \usepackage{ucs}
 \usepackage{amsmath}
@@ -10,11 +16,6 @@
 \usepackage{avm}
 %\usepackage{subfigure}
 %\usepackage{natbib} apa style etc.
-\usepackage{verbatim}
-\usepackage{linguex}
-\usepackage[pdftex]{graphicx}
-\usepackage[english]{babel}
-\usepackage[colorlinks=true, linkcolor=black, urlcolor=blue, pdfborder={0 0 0}]{hyperref}
 
 \newtheorem{theorem}{Theorem}[section]
 
@@ -24,8 +25,8 @@
 
 \begin{document}
 \title{Using DOP for transformations}
-\author{Andreas van Cranenburgh\footnote{0440949, \texttt{acranenb@science.uva.nl} 
-\and Joost Winter\footnote{9928545, \texttt{jwinter@science.uva.nl}}
+\author{Andreas van Cranenburgh\footnote{0440949, \texttt{acranenb@science.uva.nl}} 
+\and Joost Winter\footnote{9928545, \texttt{jwinter@science.uva.nl}}}
 \maketitle
 
 \begin{center}
@@ -37,16 +38,20 @@ Project report, first draft
 \vspace{5em}
 
 \begin{abstract}
-In this paper, we make an investigation into Data Oriented Transformations,
-basing ourselves on the existing concepts of Data Oriented Parsing, synchronous
-grammars, and the Goodman Reduction. The goal is to define and evaluate a general
-formalism for learning arbitrary transformations such as movement and insertions
-based on annotated data.  Parsing a sentence should result in a pair of trees
-corresponding to the original and a transformed sentence. The test case will be
-declarative versus interrogative questions.
+In this paper, we investigate Data-Oriented Transformation,
+based on the existing formalisms of Data-Oriented Parsing, synchronous
+grammar, and the Goodman Reduction. The goal is to define and evaluate a general
+formalism for learning arbitrary transformations composed of movement and insertions
+based on annotated exemplars.  Parsing a sentence should result in a pair of trees
+corresponding to the original and a transformed sentence. 
+This stochastic approach contrasts with purely rule-based formalisms such as
+transformational grammar, in which abstract representations are manipulated
+with {\em a priori} specified operations. %The acquisition [... forgot my train of thought here; something about it being a contentious issue, structure dependency etc.]
+The test case will be declarative versus interrogative sentences.
 \end{abstract}
 
 \newpage
+\tableofcontents
 
 \section{Introduction}
 
@@ -59,10 +64,11 @@ and interrogative sentences in English, but the developed framework should be
 generalizable to other transformations, such as:
 
 \begin{itemize}
+\item Transformations between affirmative and negative sentences.
 \item The transformation between the `main clause' and `auxiliary clause'
 	sentence order in Dutch.
-\item Transformations between affirmative and negative sentences.
-\item Similar transformations in other languages.
+\item Active versus passive sentences, focus, wh-fronting, etc.
+%\item Similar transformations in other languages.
 \end{itemize}
 
 For this project, we make use of a number of existing frameworks that may prove
@@ -77,14 +83,28 @@ useful to us. In particular, these include:
 
 In section \ref{sec:theor}, these underlying frameworks (as well as their
 relevance to our project) will be explained in a somewhat more detailed
-fashioned; then in section \ref{sec:approach}, our own approach will be described more
-comprehensively; in section \ref{sec:implem}, further details regarding our implementation
-will be given, and in section \ref{sec:eval}, the obtained results will be presented.
+fashioned; then in section \ref{sec:approach}, our own approach will be
+described more comprehensively; in section \ref{sec:implem}, further details
+regarding our implementation will be given, and in section \ref{sec:eval}, the
+obtained results will be presented.
 
 \section{Theoretical framework}
 \label{sec:theor}
 
+We will use a data-oriented approach. This is opposed to the abstract, rule-based
+formalisms such as transformational grammar, which assume abstract structures in
+addition to surface structures. See figure \ref{synchdop} for a diagrammatic overview
+the relation of our project to traditional, generative approach.
+
+\begin{figure}
+\centering\includegraphics[width=0.7\textwidth]{synchdop-crop}
+\label{synchdop}
+\caption{Overview of transformations: the orthodox approach (transformational grammar),
+	contrasted with our data-oriented approach}
+\end{figure}
+
 \subsection{Synchronous grammars}
+\label{subsec:synch}
 
 In \cite{Ch}, the concept of a synchronous grammar is introduced, as a tool to
 easily extend the notion of a (P)CFG into the domains of translation and
@@ -104,8 +124,11 @@ Some problems with synchronous grammars are also mentioned in \cite{Ch}. One of
 these problems is that, in reality, tree structures often do not coincide
 between the original language and the translated language. For example:
 
-\ex. \label{johnenfr}
-\begin{tabular}{lll}
+\ex.
+\label{johnenfr}
+
+%failed attempt to get <=> aligned in the middle vertically. oh well.
+\begin{tabular}{ r m{3em} l }
 \begin{parsetree}
 ( .S.
 	( .NP. `John' )
@@ -129,6 +152,7 @@ between the original language and the translated language. For example:
 )
 \end{parsetree}
 \end{tabular}
+\vspace{1em}
 
 A common analysis of \ref{johnenfr} is problematic under the original
 framework of synchronous grammars, because of the mismatch in the tree
@@ -136,10 +160,11 @@ structures.
 
 Similarly, when looking at transformations between declarative and
 interrogative sentences, and basing ourselves on standard analyses of the
-Stanford parser (which are made using the standards described for the Penn
+Stanford parser (which are based on the annotation of the Penn
 treebank), we encounter the following pairs of trees:
 
 \ex. \label{marylike}
+
 \begin{tabular}{lll}
 \begin{parsetree}
 ( .S.
@@ -150,13 +175,14 @@ treebank), we encounter the following pairs of trees:
 \end{parsetree}
 & $\iff$ &
 \begin{parsetree}
-  (.SQ. (.VBD. `did')
+  (.SQ. (.VBD. `does')
     (.NP. (.NNP. `Mary'))
     (.VP. (.VB. `like')
       (.NP. (.NNS. `cars')))
     )
 \end{parsetree}
 \end{tabular}
+\vspace{1em}
 
 Again, we here are faced with a pair of sentences, where the tree structures
 are rather different from each other.
@@ -167,10 +193,10 @@ mismatch between the trees is resolved.
 
 \subsection{DOP for translations}
 
-In \cite{Po} and \cite{Po2}, synchronous grammars are extended from plain PCFGs
-to the DOP framework: instead of looking at rules with two right-hand sides and
-a corresponding set of non-terminals, we now consider pairs subtrees with
-identical top nodes, and corresponding non-terminal leaf nodes.
+In \cite{Po} and \cite{Po2}, synchronous grammars are extended from plain
+PCFGs to the DOP framework: instead of looking at rules with two right-hand
+sides and a corresponding set of non-terminals, we now consider pairs
+subtrees with identical top nodes, and corresponding non-terminal leaf nodes.
 
 These linked subtrees are then combined into a bag of linked subtree pairs,
 which can then be used as a grammar for translations and transformations. Just
@@ -209,7 +235,7 @@ in the framework of \cite{Po}, we are not necessarily dependent on strong
 similarities between the tree structures on both sides (although, ultimatlely,
 a strong similarity may still be a prerequisite for good performance). This
 would make translations and transformations, such as in the examples given in
-section 2.1, possible.
+section \ref{subsec:synch}, possible.
 
 Of course, it should be noted that, in this framework, it is unlikely that
 \emph{all} subtrees on the source side are linked to subtrees on the target
@@ -251,7 +277,141 @@ the STSG trees with equal probability.
 \section{Approach}
 \label{sec:approach}
 
+\subsection{Definition of DOP model}
+
+We will assume a parallel corpus of pairs of trees with declarative and
+interrogative versions of sentences. This assumption lies on the extreme
+end of supervised parsing; other options are a bag of unrelated sentences
+marked as declarative or interrogative in their root node. Whether the
+assumption of a parallel corpus is cognitively plausible in terms of
+language acquisition is irrelevant because the point is to learn
+transformations from exemplars alone, without relying on built in primitives
+for movement and insertions, or on a common, abstract representation for
+sentences such as Deep Structures or Logical Form in generative grammar.
+
+Assuming ordered pairs of trees, $\langle T_{\mathit{s}},
+T_{\mathit{t}} \rangle $, may be enough to learn transformations
+from data alone. Naturally the word forms will often coincide, so words are
+implicitly linked (although this may be problematic with multiple occurrences
+in the same sentence). Further annotation could add indices for each
+constituent, but this implies labor-intensive annotation. More difficult than
+the linking problem is the problem of structure mismatch. Consider the following
+example:
+
+\ex. \label{maryhappy}
+
+\begin{tabular}{lll}
+\begin{parsetree}
+( .S.
+    (.NP. (.NNP. `Mary'))
+    (.VP. (.VBZ. `is')
+      (.ADJP. (.JJ. `happy')))
+)
+\end{parsetree}
+& $\iff$ &
+\begin{parsetree}
+  (.SQ. 
+    (.VBZ. `is')
+    (.NP. (.NNP. `Mary'))
+    (.ADJP. (.JJ. `happy'))
+    )
+\end{parsetree}
+\end{tabular}
+\vspace{1em}
+
+In the phrase-structure annotation of the interrogative of \ref{maryhappy} (as produced
+by the Stanford parser), the \textsc{VP} constituent has arguably become a
+discontinuous constituent \cite{Ha}, but due to a strong, pragmatically
+motivated preference for orthodox phrase-structures in computational linguistics (as
+well as a completely indefensible Anglocentrism), such
+information is sacrificed by collapsing the phrase-structure. This means that
+the phrase-structure no longer encodes the connection of the verb and its
+direct object. A more elaborate representation such as employed in the discontinuous
+constituent phrase-structure grammar of \cite{Ha} would make it possible to streamline
+the annotation of sentences so that less configurational information can be preserved.
+Note that discontinuous constituents are only a minor step in the spectrum of
+constituency versus dependency. While a discontinuous constituent violates the
+canonical definition of a tree, it is still word order which determines constituency
+(e.g., in the example a fronted auxiliary verb signifies VSO order),
+and it is not obvious that a free word-order language could be profitably
+described by such a representation. When \ref{maryhappy} is represented using
+discontinuous constituents, the tree could look like this:
+
+\ex. \label{marydiscont}
+
+\begin{center}
+\includegraphics[width=0.5\textwidth]{maryishappy-crop.pdf}
+\end{center}
+\vspace{1em}
+
+It is clear that this kind of representation provides a way to avoid structure
+mismatch as a result of movement completely (ie., the bag of non-terminals will
+be equivalent for both structures). The absence of the auxiliary `did' in the
+declarative such as in \ref{marylike} can be represented by trace elements; an
+even simpler strategy would be to allow structure mismatch as long as one of
+the trees is a proper subtree of the other. The reason that it may be
+worthwhile to avoid structure mismatch is that it maximizes the number of
+parallel subtrees, which minimizes the violation of the DOP hypothesis stating
+that all fragments should count in order to fully exploit the data at hand. It
+may turn out that without isomorphic phrase-structures, the generalizing power
+of synchronous DOP is not sufficient to handle complex, novel sentences (long
+constituents, relative or embedded clauses, etc.).
+
+The same definition for subtrees and fragments can be applied to discontinuous
+structures, it is basically a matter of annotation and implementation to employ
+them, not formalism.  Whether it will be necessary or worthwhile to adopt
+discontinuous constituents will have to be determined emprically. Initially we
+will attempt to use the standard PTB phrase-structure annotation and see how well
+it works; this has the obvious advantage of the availability of large corpora such
+as the WSJ, which can complement a small, hand-annotated parallel treebank.
+
+\newpage %fixme
+
+As a compromise between the impoverished PTB annotation and the rich but non-standard
+discontinuous annotation, we could consider labelling POS tags with (former) parent
+annotations, e.g.:
+
+\ex. \label{maryhappyann}
+
+\begin{tabular}{lll}
+\begin{parsetree}
+( .S.
+    (.NP. (.NNP. `Mary'))
+    (.VP. (.VBZ. `is')
+      (.ADJP. (.JJ. `happy')))
+)
+\end{parsetree}
+& $\iff$ &
+\begin{parsetree}
+  (.SQ.
+    (.VBZ[VP]. `is')
+    (.NP. 
+	(.NNP. `Mary'))
+    (.ADJP[VP]. (.JJ. `happy'))
+    )
+\end{parsetree}
+\end{tabular}
+\vspace{1em}
+
+As operations we will restrict ourselves to the standard substitution operation. While
+it may seem obvious to extend the DOP framework with movement and adjunction operations,
+that has the downside of having to adapt the existing, well-defined formalisms,
+including their probability models. On top of that we set out to induce transformations
+from data alone, so making such things part of the formalism means smuggling in
+{\em a priori} expectations (albeit only in a very general sense).
+
+As estimation method we will employ the standard DOP1 estimator, but DOP* or %cite these
+backoff-DOP can be considered as well. Although sparsity of evidence is
+claimed to be an insurmountable problem for non-nativist theories by
+generativists, for example the transformation of aux-fronting seems simple
+enough given elaborate information such as phrase structures. For this reason
+it would seem that DOP1 should be adequate.
+
 \subsection{A reduction for synchronous DOP}
+
+As an instantiation of the previously mentioned assumptions, we will apply
+Data-Oriented Translation to transformations. For implementation efficiency
+we would like to use the Goodman reduction.
 
 We are now faced with the situation, that we cannot simply apply the Goodman
 reduction, reducing subtree pairs to PCFG rules, because of the reason that not
@@ -322,28 +482,68 @@ the original synchronous DOP model.
 \section{Implementation}
 \label{sec:implem}
 
+TBD.
+
 \section{Evaluation}
 \label{sec:eval}
 
+Standard \textsc{parseval} measures (with \texttt{EVALB}), transformations in both
+directions. Take (part of) WSJ treebank, hand annotate corresponding transformed
+sentences.
+
+TBD. 
+
 \section{Conclusions}
+
+TBD.
+
 \label{sec:conc}
+
+%todo bibtex this. natbib, APA style.
 
 \begin{thebibliography}{BlAbLa00}
 
-\bibitem[Ch]{Ch} Chiang, David, \emph{An Introduction to Synchronous Grammars}
+%todo: add URLs with \url{http://...}, complete references
+\bibitem[Ch]{Ch} Chiang, David (20XX), ``An Introduction to Synchronous Grammars.''
 
-\bibitem[Po]{Po} Poutsma, Arjen, \emph{Data-Oriented Translation}, presented at
-	COLING 2000
+\bibitem[Po]{Po} Poutsma, Arjen (2000), ``Data-Oriented Translation,'' presented at
+	COLING 2000.
 
-\bibitem[Po2]{Po2} Poutsma, Arjen, \emph{Data-Oriented Translation}, master's
-	thesis, 2000
+\bibitem[Po2]{Po2} Poutsma, Arjen (2000), ``Data-Oriented Translation,'' master's
+	thesis, University of Amsterdam.
 
-\bibitem[Go]{Go} Goodman, Joshua, \emph{Efficient Parsing of DOP with
-	PCFG-reductions} in \emph{Data Oriented Parsing} (2002), Bod, Rens;
+\bibitem[Go]{Go} Goodman, Joshua (2002), ``Efficient Parsing of DOP with
+	PCFG-reductions'' in \emph{Data Oriented Parsing} (2002), Bod, Rens;
 	Sima'an, Khalil; and Scha, Remko, eds.
+
+\bibitem[Ha]{Ha} Harman, Gilbert H.\ (1963), ``Generative Grammars without
+	Transformation Rules: A Defense of Phrase-Structure,'' \emph{Language},
+	vol.\ 39, no.\ 4, pp.\ 597-616
+
+%This reference has sections on learning aux-fronting from positive data alone:
+%\bibitem[Ma]{Ma} MacWhinney, Brian (20XX), ``A multiple process solution to the logical
+%problem of language acquisition'' [...]
+
+%This reference should have some experiments with childes data to parse
+%interrogatives based on declaratives etc.
+%\bibitem[Bo]{Bo} Bod, Rense. A linguistic investigation into unsupervised DOP
 
 \end{thebibliography}
 
 \end{document}
 
 comments & todo items go here . . .
+
+typesetting discontinuous constituent trees:
+
+http://www.ling.uni-potsdam.de/~rvogel/xyling
+Ralf Vogel's xyling package: this package is very flexible and powerful, and does not use pstricks etc. (so you can see the trees in the dvi output). It supports labeling of branches as well as nodes, as well as lines and arrows that relate discontinuous pieces of the tree. [package, documentation]
+
+http://tug.ctan.org/tex-archive/macros/latex/contrib/rrgtrees/
+the RRGtrees package, by David Gardner, provides LaTeX macros for the sorts of
+tree diagram used in Role and Reference Grammar. This includes trees with
+crossing lines, as is required by some languages in this theory. It uses
+pstricks. [The distribution includes a `make' file (so, just `make
+rrgtrees.sty' will create the style file), but if you haven't got `make' you
+can create rrgtrees.sty by running latex over rrgtrees.ins.]
+
