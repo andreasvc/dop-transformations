@@ -13,9 +13,31 @@
 \usepackage{amsthm}
 \usepackage[all]{xy}
 \usepackage{parsetree}
+\usepackage{qtree}
 \usepackage{avm}
 %\usepackage{subfigure}
-%\usepackage{natbib} apa style etc.
+\usepackage{natbib} 
+
+\bibpunct{(}{)}{;}{a}{,}{;}
+
+%bibpunct requires six mandatory parameters.  
+%1. The symbol for the opening bracket.  
+%2. The symbol for the closing bracket.  
+%3. The symbol that appears between multiple citations.  
+%4. This argument takes a letter: 
+%    * n - numerical style. 
+%    * s - numerical superscript style. 
+%    * any other letter - author-year style.  
+%5. The punctuation to appear between the author and the year (in parenthetical
+%   case only.
+%6. The punctuation used between years, in multiple citations when
+%   there is a common author. e.g., (Chomsky 1956, 1957). If you want an extra
+%   space, then you need {,~}.
+
+
+%usage: 
+% \citet{chomsky} => Chomsky (1967)
+% \citep{chomsky} => (Chomsky 1967)
 
 \newtheorem{theorem}{Theorem}[section]
 
@@ -24,6 +46,7 @@
 \newtheorem{definition}[theorem]{Definition}
 
 \begin{document}
+
 \title{Using DOP for transformations}
 \author{Andreas van Cranenburgh\footnote{0440949, \texttt{acranenb@science.uva.nl}} 
 \and Joost Winter\footnote{9928545, \texttt{jwinter@science.uva.nl}}}
@@ -75,10 +98,9 @@ For this project, we make use of a number of existing frameworks that may prove
 useful to us. In particular, these include:
 
 \begin{itemize}
-\item Synchronous grammars, as developed by David Chiang in \cite{Ch}.
-\item Data Oriented Translation framework by Arjen Poutsma in \cite{Po} and
-	\cite{Po2}.
-\item The Goodman-reduction, as developed by Joshua Goodman in \cite{Go}.
+\item Synchronous grammars, as developed by \citet{chiang2006introduction}.
+\item Data Oriented Translation framework by \citet{poutsma2000msc, poutsma2000coling}.
+\item The Goodman-reduction, as developed by \citet{goodman2003efficient}.
 \end{itemize}
 
 In section \ref{sec:theor}, these underlying frameworks (as well as their
@@ -106,13 +128,13 @@ the relation of our project to traditional, generative approach.
 \subsection{Synchronous grammars}
 \label{subsec:synch}
 
-In \cite{Ch}, the concept of a synchronous grammar is introduced, as a tool to
-easily extend the notion of a (P)CFG into the domains of translation and
-transformation. The main idea, here, is that instead of single CFG-rules with a
-left and right hand side, every rule now has a pair of right-hand sides -- one
-corresponding to the source language, and the other corresponding to the target
-language. Moreover, there has to be a bijective function between the
-nonterminal symbols on both right-hand sides.
+In \citet{chiang2006introduction}, the concept of a synchronous grammar is
+introduced, as a tool to easily extend the notion of a (P)CFG into the domains
+of translation and transformation. The main idea, here, is that instead of
+single CFG-rules with a left and right hand side, every rule now has a pair of
+right-hand sides -- one corresponding to the source language, and the other
+corresponding to the target language. Moreover, there has to be a bijective
+function between the nonterminal symbols on both right-hand sides.
 
 Parsing and translating using synchronous grammars is just as easy as it is for
 regular PCFGs: to translate, we simply parse using the right-hand sides
@@ -120,9 +142,10 @@ corresponding to the source language. By reading off the right-hand sides
 corresponding to the target language, of the rules used in the derivation, the
 translation is immediately obtained.
 
-Some problems with synchronous grammars are also mentioned in \cite{Ch}. One of
-these problems is that, in reality, tree structures often do not coincide
-between the original language and the translated language. For example:
+Some problems with synchronous grammars are also mentioned in
+\citet{chiang2006introduction}. One of these problems is that, in reality, tree
+structures often do not coincide between the original language and the
+translated language. For example:
 
 \ex.
 \label{johnenfr}
@@ -193,10 +216,11 @@ mismatch between the trees is resolved.
 
 \subsection{DOP for translations}
 
-In \cite{Po} and \cite{Po2}, synchronous grammars are extended from plain
-PCFGs to the DOP framework: instead of looking at rules with two right-hand
-sides and a corresponding set of non-terminals, we now consider pairs
-subtrees with identical top nodes, and corresponding non-terminal leaf nodes.
+In \citet{poutsma2000msc, poutsma2000coling}, synchronous grammars are extended
+from plain PCFGs to the DOP framework: instead of looking at rules with two
+right-hand sides and a corresponding set of non-terminals, we now consider
+pairs subtrees with identical top nodes, and corresponding non-terminal leaf
+nodes.
 
 These linked subtrees are then combined into a bag of linked subtree pairs,
 which can then be used as a grammar for translations and transformations. Just
@@ -204,7 +228,7 @@ like in the case of synchronous PCFGs, we can simply parse new sentences using
 the source `side' of the grammar, and derive the corresponding target side
 immediately.
 
-Formally, in \cite{Po}, linked subtree pairs are defined as follows:
+Formally, in \citet{poutsma2000coling}, linked subtree pairs are defined as follows:
 
 \begin{definition}
 Given a pair of linked trees $\langle T_1, T_2 \rangle$, a \emph{linked subtree
@@ -231,43 +255,44 @@ the bag in which linked subtree pairs occur exactly as often as they can be
 identified in $C$.
 
 An important contrast with the earlier synchronous grammars for PCFGs, is that
-in the framework of \cite{Po}, we are not necessarily dependent on strong
-similarities between the tree structures on both sides (although, ultimatlely,
-a strong similarity may still be a prerequisite for good performance). This
-would make translations and transformations, such as in the examples given in
-section \ref{subsec:synch}, possible.
+in the framework of \citet{poutsma2000coling}, we are not necessarily dependent
+on strong similarities between the tree structures on both sides (although,
+ultimatlely, a strong similarity may still be a prerequisite for good
+performance). This would make translations and transformations, such as in the
+examples given in section \ref{subsec:synch}, possible.
 
 Of course, it should be noted that, in this framework, it is unlikely that
 \emph{all} subtrees on the source side are linked to subtrees on the target
 side: especially in the (far from unlikely) case where the total number of
 subtree differs, this has to be trivially false.
 
-A problem with the DOT model, as described in \cite{Po}, consists of the fact
-that the complexity of parsing new sentences can be quite huge, as the number
-of subtrees can be (at worst) exponential in the number of nodes. For standard
-DOP-based parsing the Goodman reduction, which will be described in the next
-section, has been found to resolve such issues: however, because we do not have
-a complete set of subtrees available to use, it is impossible to use this
-reduction right away. This question of finding a suitable reduction for the DOT
-model as described in \cite{Po} and \cite{Po2}, will be addressed at a later
-stage in this report.
+A problem with the DOT model, as described in \citet{poutsma2000coling},
+consists of the fact that the complexity of parsing new sentences can be quite
+huge, as the number of subtrees can be (at worst) exponential in the number of
+nodes. For standard DOP-based parsing the Goodman reduction, which will be
+described in the next section, has been found to resolve such issues: however,
+because we do not have a complete set of subtrees available to use, it is
+impossible to use this reduction right away. This question of finding a
+suitable reduction for the DOT model as described in \citet{poutsma2000msc,
+poutsma2000coling}, will be addressed at a later stage in this report.
 
 \subsection{Goodman reduction}
 
 A significant problem with DOP parsing, is the fact that the number of subtrees
-that have to be included is exponential in the size of the tree. In \cite{Go},
-a solution to this problem is presented, that is able to yield equivalent parse
-probabilities (but not equivalent derivation probabilities) to regular DOP
-parsing, while limiting the number of rules to a number that is linear in the
-number of tree nodes.
+that have to be included is exponential in the size of the tree. In
+\citet{goodman2003efficient}, a solution to this problem is presented, that is
+able to yield equivalent parse probabilities (but not equivalent derivation
+probabilities) to regular DOP parsing, while limiting the number of rules to a
+number that is linear in the number of tree nodes.
 
 Here, the subtrees are replaced by a set of PCFG-rules, where nodes can be
 either `addressed' or `non-addressed': in every tree, every node has a unique
 address, and the addressed nodes only match with that specific address, whereas
 the non-addressed nodes match with any node of the type.
 
-It is proven in \cite{Go} that the PCFG resulting from the Goodman reduction
-leads to equivalent parse probabilities as the underlying STSG:
+It is proven in \citet{goodman2003efficient} that the PCFG resulting from the
+Goodman reduction leads to equivalent parse probabilities as the underlying
+STSG:
 
 \begin{theorem}
 This construction [the Goodman-reduction] produces PCFG trees homomorphic to
@@ -302,40 +327,39 @@ example:
 
 \begin{tabular}{lll}
 \begin{parsetree}
-( .S.
-    (.NP. (.NNP. `Mary'))
+   ( .S.
+    (.NP. (.NN. `Mary'))
     (.VP. (.VBZ. `is')
-      (.ADJP. (.JJ. `happy')))
-)
+      (.ADJP. (.JJ. `happy'))))
 \end{parsetree}
 & $\iff$ &
 \begin{parsetree}
   (.SQ. 
     (.VBZ. `is')
-    (.NP. (.NNP. `Mary'))
-    (.ADJP. (.JJ. `happy'))
-    )
+    (.NP. (.NN. `Mary'))
+    (.ADJP. (.JJ. `happy')))
 \end{parsetree}
 \end{tabular}
 \vspace{1em}
 
 In the phrase-structure annotation of the interrogative of \ref{maryhappy} (as produced
 by the Stanford parser), the \textsc{VP} constituent has arguably become a
-discontinuous constituent \cite{Ha}, but due to a strong, pragmatically
-motivated preference for orthodox phrase-structures in computational linguistics (as
-well as a completely indefensible Anglocentrism), such
-information is sacrificed by collapsing the phrase-structure. This means that
-the phrase-structure no longer encodes the connection of the verb and its
-direct object. A more elaborate representation such as employed in the discontinuous
-constituent phrase-structure grammar of \cite{Ha} would make it possible to streamline
-the annotation of sentences so that less configurational information can be preserved.
-Note that discontinuous constituents are only a minor step in the spectrum of
-constituency versus dependency. While a discontinuous constituent violates the
-canonical definition of a tree, it is still word order which determines constituency
-(e.g., in the example a fronted auxiliary verb signifies VSO order),
-and it is not obvious that a free word-order language could be profitably
-described by such a representation. When \ref{maryhappy} is represented using
-discontinuous constituents, the tree could look like this:
+discontinuous constituent \citep{harman1963generative}, but due to a strong,
+pragmatically motivated preference for orthodox phrase-structures in
+computational linguistics (as well as a completely indefensible Anglocentrism),
+such information is sacrificed by collapsing the phrase-structure. This means
+that the phrase-structure no longer encodes the connection of the verb and its
+direct object. A more elaborate representation such as employed in the
+discontinuous constituent phrase-structure grammar of
+\citet{harman1963generative} would make it possible to streamline the
+annotation of sentences so that less configurational information can be
+preserved.  Note that discontinuous constituents are only a minor step in the
+spectrum of constituency versus dependency. While a discontinuous constituent
+violates the canonical definition of a tree, it is still word order which
+determines constituency (e.g., in the example a fronted auxiliary verb
+signifies VSO order), and it is not obvious that a free word-order language
+could be profitably described by such a representation.  When \ref{maryhappy}
+is represented using discontinuous constituents, the tree could look like this:
 
 \ex. \label{marydiscont}
 
@@ -386,8 +410,8 @@ annotations, e.g.:
   (.SQ.
     (.VBZ[VP]. `is')
     (.NP. 
-	(.NNP. `Mary'))
-    (.ADJP[VP]. (.JJ. `happy'))
+	(.NNP. `Mary') )
+    (.AP[VP]. (.JJ. `happy') )
     )
 \end{parsetree}
 \end{tabular}
@@ -400,12 +424,15 @@ including their probability models. On top of that we set out to induce transfor
 from data alone, so making such things part of the formalism means smuggling in
 {\em a priori} expectations (albeit only in a very general sense).
 
-As estimation method we will employ the standard DOP1 estimator, but DOP* or %cite these
-backoff-DOP can be considered as well. Although sparsity of evidence is
-claimed to be an insurmountable problem for non-nativist theories by
-generativists, for example the transformation of aux-fronting seems simple
-enough given elaborate information such as phrase structures. For this reason
-it would seem that DOP1 should be adequate.
+As estimation method we will employ the standard DOP1 estimator, but DOP*
+\citep{zollmann2005consistent} or backoff-DOP \citep{sima2003backoff, prescher2004statistical} can be considered as well. Although sparsity of
+evidence is claimed to be an insurmountable problem for non-nativist theories
+by generativists (cf.\ \citet{macwhinney2004multiple} for a discussion), for
+example the transformation of aux-fronting seems simple enough given elaborate
+information such as phrase structures; e.g. \citet{bod2007linguistic} shows
+that auxiliary fronting is learnable from positive evidence from Childes data
+annotated with dependency structures.  For this reason it would seem that DOP1
+should be adequate.
 
 \subsection{A reduction for synchronous DOP}
 
@@ -493,32 +520,18 @@ sentences.
 
 TBD. 
 
-\section{Conclusions}
+\section{Conclusion}
 
 TBD.
 
 \label{sec:conc}
 
-%todo bibtex this. natbib, APA style.
 
-\begin{thebibliography}{BlAbLa00}
+\addcontentsline{toc}{section}{\numberline{5}References}
+\bibliographystyle{plainnat}
+\bibliography{literature}
 
-%todo: add URLs with \url{http://...}, complete references
-\bibitem[Ch]{Ch} Chiang, David (20XX), ``An Introduction to Synchronous Grammars.''
-
-\bibitem[Po]{Po} Poutsma, Arjen (2000), ``Data-Oriented Translation,'' presented at
-	COLING 2000.
-
-\bibitem[Po2]{Po2} Poutsma, Arjen (2000), ``Data-Oriented Translation,'' master's
-	thesis, University of Amsterdam.
-
-\bibitem[Go]{Go} Goodman, Joshua (2002), ``Efficient Parsing of DOP with
-	PCFG-reductions'' in \emph{Data Oriented Parsing} (2002), Bod, Rens;
-	Sima'an, Khalil; and Scha, Remko, eds.
-
-\bibitem[Ha]{Ha} Harman, Gilbert H.\ (1963), ``Generative Grammars without
-	Transformation Rules: A Defense of Phrase-Structure,'' \emph{Language},
-	vol.\ 39, no.\ 4, pp.\ 597-616
+\end{document}
 
 %This reference has sections on learning aux-fronting from positive data alone:
 %\bibitem[Ma]{Ma} MacWhinney, Brian (20XX), ``A multiple process solution to the logical
@@ -527,10 +540,6 @@ TBD.
 %This reference should have some experiments with childes data to parse
 %interrogatives based on declaratives etc.
 %\bibitem[Bo]{Bo} Bod, Rense. A linguistic investigation into unsupervised DOP
-
-\end{thebibliography}
-
-\end{document}
 
 comments & todo items go here . . .
 
