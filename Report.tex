@@ -51,6 +51,7 @@ The test case will be declarative versus interrogative sentences.
 \end{abstract}
 
 \newpage
+\tableofcontents
 
 \section{Introduction}
 
@@ -276,7 +277,7 @@ the STSG trees with equal probability.
 \section{Approach}
 \label{sec:approach}
 
-\subsection{Assumptions}
+\subsection{Definition of DOP model}
 
 We will assume a parallel corpus of pairs of trees with declarative and
 interrogative versions of sentences. This assumption lies on the extreme
@@ -364,12 +365,42 @@ will attempt to use the standard PTB phrase-structure annotation and see how wel
 it works; this has the obvious advantage of the availability of large corpora such
 as the WSJ, which can complement a small, hand-annotated parallel treebank.
 
+\newpage %fixme
+
+As a compromise between the impoverished PTB annotation and the rich but non-standard
+discontinuous annotation, we could consider labelling POS tags with (former) parent
+annotations, e.g.:
+
+\ex. \label{maryhappyann}
+
+\begin{tabular}{lll}
+\begin{parsetree}
+( .S.
+    (.NP. (.NNP. `Mary'))
+    (.VP. (.VBZ. `is')
+      (.ADJP. (.JJ. `happy')))
+)
+\end{parsetree}
+& $\iff$ &
+\begin{parsetree}
+  (.SQ.
+    (.VBZ[VP]. `is')
+    (.NP. 
+	(.NNP. `Mary'))
+    (.ADJP[VP]. (.JJ. `happy'))
+    )
+\end{parsetree}
+\end{tabular}
+\vspace{1em}
+
 As operations we will restrict ourselves to the standard substitution operation. While
 it may seem obvious to extend the DOP framework with movement and adjunction operations,
-it has the downside of having to adapt the existing, well-defined formalisms,
-including their probability models.
+that has the downside of having to adapt the existing, well-defined formalisms,
+including their probability models. On top of that we set out to induce transformations
+from data alone, so making such things part of the formalism means smuggling in
+{\em a priori} expectations (albeit only in a very general sense).
 
-As estimation method we will employ the standard DOP1 estimator, but DOP* or
+As estimation method we will employ the standard DOP1 estimator, but DOP* or %cite these
 backoff-DOP can be considered as well. Although sparsity of evidence is
 claimed to be an insurmountable problem for non-nativist theories by
 generativists, for example the transformation of aux-fronting seems simple
@@ -377,6 +408,10 @@ enough given elaborate information such as phrase structures. For this reason
 it would seem that DOP1 should be adequate.
 
 \subsection{A reduction for synchronous DOP}
+
+As an instantiation of the previously mentioned assumptions, we will apply
+Data-Oriented Translation to transformations. For implementation efficiency
+we would like to use the Goodman reduction.
 
 We are now faced with the situation, that we cannot simply apply the Goodman
 reduction, reducing subtree pairs to PCFG rules, because of the reason that not
@@ -447,11 +482,24 @@ the original synchronous DOP model.
 \section{Implementation}
 \label{sec:implem}
 
+TBD.
+
 \section{Evaluation}
 \label{sec:eval}
 
+Standard \textsc{parseval} measures (with \texttt{EVALB}), transformations in both
+directions. Take (part of) WSJ treebank, hand annotate corresponding transformed
+sentences.
+
+TBD. 
+
 \section{Conclusions}
+
+TBD.
+
 \label{sec:conc}
+
+%todo bibtex this. natbib, APA style.
 
 \begin{thebibliography}{BlAbLa00}
 
