@@ -12,40 +12,52 @@ def minimal_linked_subtrees(tree1, tree2):
 
 	shared_subtrees = True # Are there any shared subtrees?
 	linked_subtrees = []
+	equivalents = []
 	tree1 = tree1.copy(True) # (deep copy)
 	tree2 = tree2.copy(True) # (deep copy)
 
 	while(shared_subtrees):
 		max_shared_subtree_size = 0 # The size of the maximal shared subtree
 		max_shared_subtree = None
+		lemmatized_equivalents = None
 		for (parent1, num1, i) in my_subtrees(tree1):
 			for (parent2, num2, j) in my_subtrees(tree2):
 				if i == j and type(i) == nltk.Tree:
 					# check if larger than current maximal tree, etc.
-					if len(i.leaves()) > max_shared_subtree_size:
-						max_shared_subtree_size = len(i.leaves())
+					if len(leaves_and_frontier_nodes(i)) > max_shared_subtree_size:
+						max_shared_subtree_size = len(leaves_and_frontier_nodes(i)) 
 						max_shared_subtree = (i, parent1, num1, parent2, num2)
 
 		# If no subtree is found yet, find an 'almost-match' (e.g. a
 		# conjugation)
 		if USE_LEMMATIZATION and max_shared_subtree == None:
+			wnl = nltk.stem.WordNetLemmatizer() 
 			for (parent1, num1, i) in my_subtrees(tree1):
-				for (parent2, num2, j) in my_subtrees(tree2):
-					if type(i) == nltk.Tree and type(j) == nltk.Tree and
-						i.node == j.node and i.node[0] == 'V' # starts with V
-						len(i) == len(j) == 1 and
-						lemma(i[0]) == lemma(j[0]):
-							pass
+				if type(i) == nltk.Tree and len(i) == 1 and type(i[0]) == str:
+					for (parent2, num2, j) in my_subtrees(tree2):
+						if (type(j) == nltk.Tree and
+							i.node == j.node and i.node[0] == 'V' and # starts with V
+							len(j) == 1 and type(j[0]) == str and
+							wnl.lemmatize(i[0], 'v') == wnl.lemmatize(j[0], 'v')):
+								lemmatized_equivalents = (i, j, parent1, num1,
+									parent2, num2)
 
 		# Remove the shared subtree from the tree...
 		if max_shared_subtree:
 			(tree, parent1, num1, parent2, num2) = max_shared_subtree
 			# Decorate tree with ids.
 			tree = decorate_with_ids(tree)
-			parent1[num1] = tree.node # nltk.Tree(tree.node, [])
-			parent2[num2] = tree.node # nltk.Tree(tree.node, [])
-
-		if max_shared_subtree == None:
+			parent1[num1] = nltk.Tree(tree.node, []) # tree.node
+			parent2[num2] = nltk.Tree(tree.node, []) # tree.node
+		elif lemmatized_equivalents:
+			(i, j, parent1, num1, parent2, num2) = lemmatized_equivalents
+			(i, j) = decorate_pair(i, j)
+			parent1[num1] = nltk.Tree(i.node, [])
+			parent2[num2] = nltk.Tree(j.node, [])
+		
+		if lemmatized_equivalents:
+			equivalents.append((i, j))
+		elif max_shared_subtree == None:
 			shared_subtrees = False
 		else:
 			linked_subtrees.append(tree)
@@ -55,8 +67,12 @@ def minimal_linked_subtrees(tree1, tree2):
 	minimal_subtrees = []
 	for i in linked_subtrees:
 		for j in i.productions():
-			minimal_subtrees.append(
-				(production_to_tree(j), production_to_tree(j)))
+			if len(j.rhs()) > 0:
+				minimal_subtrees.append(
+					(production_to_tree(j), production_to_tree(j)))
+
+	for (x, y) in equivalents:
+		minimal_subtrees.append((x, y))
 
 	minimal_subtrees.append((tree1, tree2))
 	return minimal_subtrees
@@ -65,8 +81,8 @@ def linked_subtrees_to_probabilistic_rules(linked_subtrees):
 	# Add 'links' between leaf nodes.
 	linked_subtrees2 = []
 	for (t1, t2) in linked_subtrees:
-		l1 = filter(lambda x: '@' in x, t1.leaves())
-		l2 = filter(lambda x: '@' in x, t2.leaves())
+		l1 = filter(lambda x: '@' in x, leaves_and_frontier_nodes(t1))
+		l2 = filter(lambda x: '@' in x, leaves_and_frontier_nodes(t2))
 		a = [(l1.index(x), l2.index(x)) for x in l1]
 		linked_subtrees2.append((t1, t2, a))
 
@@ -75,32 +91,28 @@ def linked_subtrees_to_probabilistic_rules(linked_subtrees):
 	# Add frequency counts
 	newtrees = []
 	for (t1, t2, links) in linked_subtrees2:
-		print "\nOriginal trees:\n1: %s\n2: %s\n" % (t1, t2)
-		leafindex1 = frontier_nodes(t1)
-		leafindex2 = frontier_nodes(t2)
-		print "Leafindices:\n1: %s\n2: %s\n" % (leafindex1, leafindex2)
+		leafindex1 = dict(frontier_nodes(t1))
+		leafindex2 = dict(frontier_nodes(t2))
 
 		indices12 = [(leafindex1[l], leafindex2[l], l) for l in leafindex1.keys()]
 		for a in sublists(indices12):
-			leaves = [b[2] for b in a]
+			leaves = [str(b[2]) for b in indices12 if not (b in a)]
 			newtree1 = t1.copy(True)
 			newtree2 = t2.copy(True)
 			for (l, r, leaf) in a:
-				newtree1[l] = rmid(newtree1[l])
-				newtree2[r] = rmid(newtree2[r])
+				newtree1[l].node = rmid(str(newtree1[l].node))
+				newtree2[r].node = rmid(str(newtree2[r].node))
 			newtrees.append(
 				(newtree1, newtree2, links,
 				product(count(leaf, linked_subtrees) for leaf in leaves)))
-			print "Tree pair:\n1: %s\n2: %s\n" % (newtree1, newtree2)
 			if "@" in newtree1.node:
 				newtree1a = newtree1.copy(True)
 				newtree2a = newtree2.copy(True)
-				newtree1a.node = rmid(newtree1.node)
-				newtree2a.node = rmid(newtree2.node)
+				newtree1a.node = str(rmid(newtree1.node))
+				newtree2a.node = str(rmid(newtree2.node))
 				newtrees.append(
 					(newtree1a, newtree2a, links,
 					product(count(leaf, linked_subtrees) for leaf in leaves)) )
-				print "Tree pair:\n1: %s\n2: %s\n" % (newtree1a, newtree2a)
 				
 	return newtrees
 
@@ -118,15 +130,29 @@ def my_flatten(tree):
 
 def count(our_node, linked_subtrees):
 	for (a, b) in linked_subtrees:
-		if a.node == our_node:
+		if str(a.node) == our_node:
 			return product([
-				count(b, linked_subtrees) + 1 for
-				b in frontier_nodes(a).keys()])
+				count(str(c), linked_subtrees) + 1 for
+				c in dict(frontier_nodes(a)).keys()])
 	return -1
 
 def frontier_nodes(tree):
-	return dict((l, p) for l, p
-		in zip(tree.leaves(), tree.treepositions('leaves')) if '@' in l)
+	if frontier_node(tree):
+		return [(tree.node, ())]
+	elif type(tree) == str:
+		return []
+	else:
+		fnodes = []
+		for (stree, pos) in zip(tree, range(len(tree))):
+			fnodes += [(fnode, ((pos,) + r)) for (fnode, r) in frontier_nodes(stree)]
+		return fnodes
+
+#def frontier_nodes(tree):
+#	return dict((l, p) for l, p
+#		in zip(tree.leaves(), tree.treepositions('leaves')) if '@' in l)
+
+def frontier_node(tree):
+	return (type(tree) == nltk.Tree and len(tree) == 0)
 
 def product(l):
 	return reduce(lambda x, y: x * y, l, 1)
@@ -142,12 +168,28 @@ def decorate_with_ids(tree):
 	global current_id
 	utree = tree.copy(True)
 	for a in utree.subtrees():
-		a.node = "%s@%d" % (a.node, current_id)
-		current_id += 1
+		if not ("@" in a.node):
+			a.node = "%s@%d" % (a.node, current_id)
+			current_id += 1
 	return utree
 
+def decorate_pair(tree1, tree2):
+	global current_id
+	utree1 = tree1.copy(True)
+	utree2 = tree2.copy(True)
+	utree1.node = "%s@%d" % (utree1.node, current_id)
+	utree2.node = "%s@%d" % (utree2.node, current_id)
+	current_id += 1
+	return (utree1, utree2)
+
+def treeify(node):
+	if type(node) == nltk.grammar.Nonterminal:
+		return nltk.Tree(node, [])
+	else:
+		return node
+	
 def production_to_tree(production):
-	return nltk.Tree(str(production.lhs()), [str(r) for r in production.rhs()])
+	return nltk.Tree(str(production.lhs()), [treeify(r) for r in production.rhs()])
 
 def my_subtrees(tree): 
 	for (n, child) in zip(range(len(tree)), tree): 
@@ -179,3 +221,11 @@ def test2():
 	for b in t2:
 		for c in b: print c
 		print
+
+# (Tree('NP@0', ['DET@1', 'N@2']), Tree('NP@0', ['DET@1', 'N@2']))
+# (Tree('DET@1', ['a']), Tree('DET@1', ['a']))
+# (Tree('N@2', ['car']), Tree('N@2', ['car']))
+# (Tree('NP@3', ['John']), Tree('NP@3', ['John']))
+# (Tree('VP@5', ['V@4', 'NP@0']), Tree('VP@5', ['V@4', 'NP@0']))
+# (Tree('V@4', ['bought']), Tree('V@4', ['buy']))
+# (Tree('S', ['NP@3', 'VP@5']), Tree('S', [Tree('VBZ', ['did']), 'NP@3', 'VP@5']))
