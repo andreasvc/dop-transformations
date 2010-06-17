@@ -1,12 +1,84 @@
-import nltk
-import grammardict
 from bitpar import BitParChartParser
-from nltk import Tree
+from nltk import Tree, WeightedProduction, WeightedGrammar, \
+	InsideChartParser, FreqDist, WordNetLemmatizer, Nonterminal
 from itertools import chain, combinations
 
 USE_LEMMATIZATION = True
 
 current_id = 0
+
+class TransformationDOP:
+    def __init__(self):
+        self.grammardict = {}
+
+    def add_to_grammar(self, mlsts, source="left"):
+        # Adds the minimal linked subtrees (mlsts) to the grammar.
+        for (lefttree, righttree, links, count) in mlsts:
+            if source == "right":
+                lefttree, righttree = righttree, lefttree
+            flattened_tree = my_flatten(lefttree)
+            index = filter(lambda x: len(x.rhs()) > 0,
+                           my_flatten(lefttree).productions())[0]
+            if index in self.grammardict.keys():
+                tree_links_found = False
+                for (curtree, curlinks, curcount) in self.grammardict[index]:
+                    if curtree == righttree and curlinks == links:
+                        tree_links_found = True
+                        self.grammardict[index].remove((curtree, curlinks, curcount))
+                        self.grammardict[index].append((curtree, curlinks, curcount + count))
+                if not tree_links_found:
+                    self.grammardict[index].append((righttree, links, count))
+            else:
+                self.grammardict[index] = [(righttree, links, count)]
+        pass
+
+    def print_grammar(self):
+        for (key, value) in self.grammardict.items():
+            print "Source rule: %s\n\n" % key
+            for (tree, links, count) in value:
+                print "  Tree: %s\n" % tree
+                print "  Links: %s\n" % links
+                print "  Count: %s\n\n" % count
+            print
+
+    def get_grammar(self, freqfn=max, prob=True, root="S"):
+        # Returns a PCFG. (Use freqfn=max for most likely derivation, prob=sum for most likely parse)
+        # grammar = []
+        #for (key, value) in self.grammardict.items():
+        #    grammar.append(WeightedProduction(key.lhs(), key.rhs(), prob=freqfn([count for tree, links, count in value])))
+        # return grammar
+	grammar = [ WeightedProduction(key.lhs(), key.rhs(), prob=freqfn(count for tree, links, count in value))
+        	         for key, value in self.grammardict.items() ]
+	if prob:
+		fd = FreqDist()
+		for key in grammar:
+			fd.inc(key.lhs(), count=key.prob())
+		#fd = FreqDist((key.lhs(), key.prob()) for key in grammar)
+		grammar = [WeightedProduction(key.lhs(), key.rhs(), 
+			prob=freqfn(count for tree, links, count in value) / float(fd[key.lhs()]))
+        	        for key, value in self.grammardict.items()]
+	        return WeightedGrammar(Nonterminal(root), grammar)
+	else:
+		return grammar
+
+
+    def get_mlt_deriv(self, tree):
+        # Returns the most likely transformation of tree (based on the most likely derivation).
+        top_production = tree.productions()[0]
+
+        # Finds the most likely right hand side of top-production
+        maxcount = 0
+        for (curtree, curlinks, curcount) in self.grammardict[top_production]:
+            if x[2] > maxcount:
+                tree, links, count = curtree, curlinks, curcount
+
+        new_subtrees = []
+        for a in tree:
+            if type(a) == Tree:
+                new_subtrees.append(self.get_mlt_deriv(a))
+
+        # Add new subtrees
+        pass
 
 def minimal_linked_subtrees(tree1, tree2):
 	# Takes out shared subtrees from tree1 and tree2, until nothing is left.
@@ -34,7 +106,7 @@ def minimal_linked_subtrees(tree1, tree2):
 		# If no subtree is found yet, find an 'almost-match' (e.g. a
 		# conjugation)
 		if USE_LEMMATIZATION and max_shared_subtree == None:
-			wnl = nltk.stem.WordNetLemmatizer() 
+			wnl = WordNetLemmatizer() 
 			for (parent1, num1, i) in my_subtrees(tree1):
 				if type(i) == Tree and len(i) == 1 and type(i[0]) == str:
 					for (parent2, num2, j) in my_subtrees(tree2):
@@ -189,7 +261,7 @@ def decorate_pair(tree1, tree2):
 	return (utree1, utree2)
 
 def treeify(node):
-	if type(node) == nltk.grammar.Nonterminal:
+	if type(node) == Nonterminal:
 		return Tree(str(node), [])
 	else:
 		return node
@@ -221,11 +293,6 @@ def test():
 	a = gr.get_grammar()
 	return a
 
-def add_to_grammar(gr, tree1, tree2):
-	t = minimal_linked_subtrees(tree1, tree2)
-	t2 = linked_subtrees_to_probabilistic_rules(t)
-	gr.add_to_grammar(t2)
-
 def test2():
 	tree1 = Tree("(S (NP mary) (VP walks))")
 	tree2 = Tree("(S (NP mary) (VP walks))")
@@ -244,12 +311,18 @@ def test3():
 """.splitlines()
 	corpus = map(Tree, corpus)
 	corpus = zip(corpus[::2], corpus[1::2])
+	print 'corpus:', corpus
 
-	gr = grammardict.TransformationDOP()
-	for x, y in corpus:
-		add_to_grammar(gr, x, y)
-	b = BitParChartParser(gr.get_grammar())
+	gr = TransformationDOP()
+	print 'gr', gr
+	for tree1, tree2 in corpus:
+		gr.add_to_grammar(linked_subtrees_to_probabilistic_rules(
+					minimal_linked_subtrees(tree1, tree2)))
+	print 'a2gr', gr.get_grammar()
+	b = InsideChartParser(gr.get_grammar())
+	print 'done'
 	while True:
+		print 'sentence:',
 		a=raw_input()
 		print b.parse(a.split())
 
