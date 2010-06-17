@@ -1,4 +1,6 @@
 import nltk
+import grammardict
+from nltk import Tree
 from itertools import chain, combinations
 
 USE_LEMMATIZATION = True
@@ -22,7 +24,7 @@ def minimal_linked_subtrees(tree1, tree2):
 		lemmatized_equivalents = None
 		for (parent1, num1, i) in my_subtrees(tree1):
 			for (parent2, num2, j) in my_subtrees(tree2):
-				if i == j and type(i) == nltk.Tree:
+				if i == j and type(i) == Tree:
 					# check if larger than current maximal tree, etc.
 					if len(leaves_and_frontier_nodes(i)) > max_shared_subtree_size:
 						max_shared_subtree_size = len(leaves_and_frontier_nodes(i)) 
@@ -33,9 +35,9 @@ def minimal_linked_subtrees(tree1, tree2):
 		if USE_LEMMATIZATION and max_shared_subtree == None:
 			wnl = nltk.stem.WordNetLemmatizer() 
 			for (parent1, num1, i) in my_subtrees(tree1):
-				if type(i) == nltk.Tree and len(i) == 1 and type(i[0]) == str:
+				if type(i) == Tree and len(i) == 1 and type(i[0]) == str:
 					for (parent2, num2, j) in my_subtrees(tree2):
-						if (type(j) == nltk.Tree and
+						if (type(j) == Tree and
 							i.node == j.node and i.node[0] == 'V' and # starts with V
 							len(j) == 1 and type(j[0]) == str and
 							wnl.lemmatize(i[0], 'v') == wnl.lemmatize(j[0], 'v')):
@@ -47,13 +49,13 @@ def minimal_linked_subtrees(tree1, tree2):
 			(tree, parent1, num1, parent2, num2) = max_shared_subtree
 			# Decorate tree with ids.
 			tree = decorate_with_ids(tree)
-			parent1[num1] = nltk.Tree(tree.node, []) # tree.node
-			parent2[num2] = nltk.Tree(tree.node, []) # tree.node
+			parent1[num1] = Tree(tree.node, []) # tree.node
+			parent2[num2] = Tree(tree.node, []) # tree.node
 		elif lemmatized_equivalents:
 			(i, j, parent1, num1, parent2, num2) = lemmatized_equivalents
 			(i, j) = decorate_pair(i, j)
-			parent1[num1] = nltk.Tree(i.node, [])
-			parent2[num2] = nltk.Tree(j.node, [])
+			parent1[num1] = Tree(i.node, [])
+			parent2[num2] = Tree(j.node, [])
 		
 		if lemmatized_equivalents:
 			equivalents.append((i, j))
@@ -81,9 +83,12 @@ def linked_subtrees_to_probabilistic_rules(linked_subtrees):
 	# Add 'links' between leaf nodes.
 	linked_subtrees2 = []
 	for (t1, t2) in linked_subtrees:
-		l1 = filter(lambda x: '@' in x, leaves_and_frontier_nodes(t1))
-		l2 = filter(lambda x: '@' in x, leaves_and_frontier_nodes(t2))
+		l1 = filter(lambda x: (type(x) == Tree and '@' in x.node), leaves_and_frontier_nodes(t1))
+		l2 = filter(lambda x: (type(x) == Tree and '@' in x.node), leaves_and_frontier_nodes(t2))
+		# Very ugly, but might be needed to guarantee the right outcome...
 		a = [(l1.index(x), l2.index(x)) for x in l1]
+		a.sort
+		a = [x[1] for x in a] 
 		linked_subtrees2.append((t1, t2, a))
 
 	# For every addressed node, look at possible ways to remove id again.
@@ -119,14 +124,14 @@ def linked_subtrees_to_probabilistic_rules(linked_subtrees):
 def leaves_and_frontier_nodes(tree):
 	leaves = [] 
 	for child in tree: 
-		if isinstance(child, nltk.Tree) and len(child) > 0: 
+		if isinstance(child, Tree) and len(child) > 0: 
 			leaves.extend(leaves_and_frontier_nodes(child)) 
 		else: 
 			leaves.append(child) 
 	return leaves 
 
 def my_flatten(tree):
-	return nltk.Tree(tree.node, leaves_and_frontier_nodes(tree))
+	return Tree(tree.node, leaves_and_frontier_nodes(tree))
 
 def count(our_node, linked_subtrees):
 	for (a, b) in linked_subtrees:
@@ -152,7 +157,7 @@ def frontier_nodes(tree):
 #		in zip(tree.leaves(), tree.treepositions('leaves')) if '@' in l)
 
 def frontier_node(tree):
-	return (type(tree) == nltk.Tree and len(tree) == 0)
+	return (type(tree) == Tree and len(tree) == 0)
 
 def product(l):
 	return reduce(lambda x, y: x * y, l, 1)
@@ -184,23 +189,45 @@ def decorate_pair(tree1, tree2):
 
 def treeify(node):
 	if type(node) == nltk.grammar.Nonterminal:
-		return nltk.Tree(node, [])
+		return Tree(str(node), [])
 	else:
 		return node
 	
 def production_to_tree(production):
-	return nltk.Tree(str(production.lhs()), [treeify(r) for r in production.rhs()])
+	return Tree(str(production.lhs()), [treeify(r) for r in production.rhs()])
 
 def my_subtrees(tree): 
 	for (n, child) in zip(range(len(tree)), tree): 
 		yield (tree, n, child)
-		if isinstance(child, nltk.tree.Tree): 
+		if isinstance(child, Tree): 
 			for subtree in my_subtrees(child): 
 				yield subtree
 
 def test():
-	tree1 = nltk.Tree("(S (NP John) (VP (V bought) (NP (DET a) (N car))))")
-	tree2 = nltk.Tree("(S (VBZ did) (NP John) (VP (V buy) (NP (DET a) (N car))))")
+	tree1 = Tree("(S (NP John) (VP (V bought) (NP (DET a) (N car))))")
+	tree2 = Tree("(S (VBZ did) (NP John) (VP (V buy) (NP (DET a) (N car))))")
+	t = minimal_linked_subtrees(tree1, tree2)
+	for a in t: print a
+	t2 = linked_subtrees_to_probabilistic_rules(t)
+	print
+	print
+	for b in t2:
+		for c in b: print c
+		print
+	gr = grammardict.TransformationDOP()
+	gr.add_to_grammar(t2)
+	gr.print_grammar()
+	a = gr.get_grammar()
+	return a
+
+def add_to_grammar(gr, tree1, tree2):
+	t = minimal_linked_subtrees(tree1, tree2)
+	t2 = linked_subtrees_to_probabilistic_rules(t)
+	gr.add_to_grammar(t2)
+
+def test2():
+	tree1 = Tree("(S (NP mary) (VP walks))")
+	tree2 = Tree("(S (NP mary) (VP walks))")
 	t = minimal_linked_subtrees(tree1, tree2)
 	for a in t: print a
 	t2 = linked_subtrees_to_probabilistic_rules(t)
@@ -210,17 +237,17 @@ def test():
 		for c in b: print c
 		print
 
-def test2():
-	tree1 = nltk.Tree("(S (NP mary) (VP walks))")
-	tree2 = nltk.Tree("(S (NP mary) (VP walks))")
-	t = minimal_linked_subtrees(tree1, tree2)
-	for a in t: print a
-	t2 = linked_subtrees_to_probabilistic_rules(t)
-	print
-	print
-	for b in t2:
-		for c in b: print c
-		print
+def test3():
+	corpus = """(S (NP John) (VP (V bought) (NP (DET a) (N car))))
+	 (S (VBZ did) (NP John) (VP (V buy) (NP (DET a) (N car))))
+""".splitlines()
+	corpus = map(Tree, corpus)
+	corpus = zip(corpus[::2], corpus[1::2])
+
+	gr = grammardict.TransformationDOP()
+	for x, y in corpus:
+		add_to_grammar(gr, x, y)
+	return gr
 
 # (Tree('NP@0', ['DET@1', 'N@2']), Tree('NP@0', ['DET@1', 'N@2']))
 # (Tree('DET@1', ['a']), Tree('DET@1', ['a']))
