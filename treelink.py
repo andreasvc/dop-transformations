@@ -1,5 +1,6 @@
 import nltk
 import grammardict
+from bitpar import BitParChartParser
 from nltk import Tree
 from itertools import chain, combinations
 
@@ -247,7 +248,12 @@ def test3():
 	gr = grammardict.TransformationDOP()
 	for x, y in corpus:
 		add_to_grammar(gr, x, y)
-	return gr
+	b = BitParChartParser(gr.get_grammar())
+	while True:
+		a=raw_input()
+		print b.parse(a.split())
+
+test3()
 
 # (Tree('NP@0', ['DET@1', 'N@2']), Tree('NP@0', ['DET@1', 'N@2']))
 # (Tree('DET@1', ['a']), Tree('DET@1', ['a']))
