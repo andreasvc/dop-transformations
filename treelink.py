@@ -313,8 +313,11 @@ def test2():
 
 def test3():
 	corpus = """(S (NP John) (VP (V bought) (NP (DET a) (N car))))
-	 (S (VBZ did) (NP John) (VP (V buy) (NP (DET a) (N car))))
-""".splitlines()
+(S (VBZ did) (NP John) (VP (V buy) (NP (DET a) (N car))))
+(S (NP Mary) (VP (VBZ is) (ADJP (JJ happy))))
+(S (VBZ is) (NP Mary) (ADJP (JJ happy)))
+(S (NP (NP (DT the) (NN man)) (SBAR (WHNP (WP who)) (S (VP (VBZ is) (VP (VBG talking)))))) (VP (VBZ is) (VP (VBG walking))))
+(S (VBZ is) (NP (NP (DT the) (NN man)) (SBAR (WHNP (WP who)) (S (VP (VBZ is) (VP (VBG talking)))))) (VP (VBG walking)))""".splitlines()
 	corpus = map(Tree, corpus)
 	corpus = zip(corpus[::2], corpus[1::2])
 	print 'corpus:', corpus
@@ -331,11 +334,16 @@ def test3():
 	print parsetree
 	print tdop.get_mlt_deriv(parsetree)
 
-	return
 	while True:
 		print 'sentence:',
 		a=raw_input()
-		print parser.parse(a.split())
+		try:
+			parsetree = parser.parse(a.split())
+		except:
+			parsetree = None
+		print "source:", parsetree
+		if parsetree:
+			print "transformed:", tdop.get_mlt_deriv(parsetree)
 
 
 test3()
