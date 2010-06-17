@@ -69,16 +69,22 @@ class TransformationDOP:
         # Finds the most likely right hand side of top-production
         maxcount = 0
         for (curtree, curlinks, curcount) in self.grammardict[top_production]:
-            if x[2] > maxcount:
-                tree, links, count = curtree, curlinks, curcount
+            if curcount > maxcount:
+                righttree, links, count = curtree, curlinks, curcount
 
         new_subtrees = []
         for a in tree:
-            if type(a) == Tree:
+            if isinstance(a, Tree):
                 new_subtrees.append(self.get_mlt_deriv(a))
 
         # Add new subtrees
-        pass
+	frontiers = frontier_nodes(righttree)
+	target = righttree.copy(True)
+	for n, index in enumerate(links):
+		#print index, n, target[frontiers[index][1]], '/', new_subtrees[n]
+		target[frontiers[index][1]] = new_subtrees[n]
+	return target
+
 
 def minimal_linked_subtrees(tree1, tree2):
 	# Takes out shared subtrees from tree1 and tree2, until nothing is left.
@@ -97,7 +103,7 @@ def minimal_linked_subtrees(tree1, tree2):
 		lemmatized_equivalents = None
 		for (parent1, num1, i) in my_subtrees(tree1):
 			for (parent2, num2, j) in my_subtrees(tree2):
-				if i == j and type(i) == Tree:
+				if i == j and isinstance(i, Tree):
 					# check if larger than current maximal tree, etc.
 					if len(leaves_and_frontier_nodes(i)) > max_shared_subtree_size:
 						max_shared_subtree_size = len(leaves_and_frontier_nodes(i)) 
@@ -108,9 +114,9 @@ def minimal_linked_subtrees(tree1, tree2):
 		if USE_LEMMATIZATION and max_shared_subtree == None:
 			wnl = WordNetLemmatizer() 
 			for (parent1, num1, i) in my_subtrees(tree1):
-				if type(i) == Tree and len(i) == 1 and type(i[0]) == str:
+				if isinstance(i, Tree) and len(i) == 1 and type(i[0]) == str:
 					for (parent2, num2, j) in my_subtrees(tree2):
-						if (type(j) == Tree and
+						if (isinstance(j, Tree) and
 							i.node == j.node and i.node[0] == 'V' and # starts with V
 							len(j) == 1 and type(j[0]) == str and
 							wnl.lemmatize(i[0], 'v') == wnl.lemmatize(j[0], 'v')):
@@ -156,8 +162,8 @@ def linked_subtrees_to_probabilistic_rules(linked_subtrees):
 	# Add 'links' between leaf nodes.
 	linked_subtrees2 = []
 	for (t1, t2) in linked_subtrees:
-		l1 = filter(lambda x: (type(x) == Tree and '@' in x.node), leaves_and_frontier_nodes(t1))
-		l2 = filter(lambda x: (type(x) == Tree and '@' in x.node), leaves_and_frontier_nodes(t2))
+		l1 = filter(lambda x: (isinstance(x, Tree) and '@' in x.node), leaves_and_frontier_nodes(t1))
+		l2 = filter(lambda x: (isinstance(x, Tree) and '@' in x.node), leaves_and_frontier_nodes(t2))
 		# Very ugly, but might be needed to guarantee the right outcome...
 		a = [(l1.index(x), l2.index(x)) for x in l1]
 		a.sort
@@ -230,7 +236,7 @@ def frontier_nodes(tree):
 #		in zip(tree.leaves(), tree.treepositions('leaves')) if '@' in l)
 
 def frontier_node(tree):
-	return (type(tree) == Tree and len(tree) == 0)
+	return (isinstance(tree, Tree) and len(tree) == 0)
 
 def product(l):
 	return reduce(lambda x, y: x * y, l, 1)
@@ -313,18 +319,24 @@ def test3():
 	corpus = zip(corpus[::2], corpus[1::2])
 	print 'corpus:', corpus
 
-	gr = TransformationDOP()
-	print 'gr', gr
+	tdop = TransformationDOP()
+	print 'gr', tdop
 	for tree1, tree2 in corpus:
-		gr.add_to_grammar(linked_subtrees_to_probabilistic_rules(
+		tdop.add_to_grammar(linked_subtrees_to_probabilistic_rules(
 					minimal_linked_subtrees(tree1, tree2)))
-	print 'a2gr', gr.get_grammar()
-	b = InsideChartParser(gr.get_grammar())
+	print 'a2gr', tdop.get_grammar()
+	parser = InsideChartParser(tdop.get_grammar())
 	print 'done'
+	parsetree = parser.parse("John bought a car".split())
+	print parsetree
+	print tdop.get_mlt_deriv(parsetree)
+
+	return
 	while True:
 		print 'sentence:',
 		a=raw_input()
-		print b.parse(a.split())
+		print parser.parse(a.split())
+
 
 test3()
 
@@ -334,4 +346,4 @@ test3()
 # (Tree('NP@3', ['John']), Tree('NP@3', ['John']))
 # (Tree('VP@5', ['V@4', 'NP@0']), Tree('VP@5', ['V@4', 'NP@0']))
 # (Tree('V@4', ['bought']), Tree('V@4', ['buy']))
-# (Tree('S', ['NP@3', 'VP@5']), Tree('S', [Tree('VBZ', ['did']), 'NP@3', 'VP@5']))
+
