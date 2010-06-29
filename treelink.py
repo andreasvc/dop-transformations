@@ -311,42 +311,50 @@ def test2():
 		for c in b: print c
 		print
 
-def test3():
+def main():
 	corpus = """(S (NP John) (VP (V bought) (NP (DET a) (N car))))
 (S (VBZ did) (NP John) (VP (V buy) (NP (DET a) (N car))))
 (S (NP Mary) (VP (VBZ is) (ADJP (JJ happy))))
 (S (VBZ is) (NP Mary) (ADJP (JJ happy)))
 (S (NP (NP (DT the) (NN man)) (SBAR (WHNP (WP who)) (S (VP (VBZ is) (VP (VBG talking)))))) (VP (VBZ is) (VP (VBG walking))))
-(S (VBZ is) (NP (NP (DT the) (NN man)) (SBAR (WHNP (WP who)) (S (VP (VBZ is) (VP (VBG talking)))))) (VP (VBG walking)))""".splitlines()
-	corpus = map(Tree, corpus)
+(S (VBZ is) (NP (NP (DT the) (NN man)) (SBAR (WHNP (WP who)) (S (VP (VBZ is) (VP (VBG talking)))))) (VP (VBG walking)))"""
+	corpus = map(Tree, corpus.splitlines())
 	corpus = zip(corpus[::2], corpus[1::2])
-	print 'corpus:', corpus
+	print 'corpus:'
+	for a,b in corpus: print "< %s, %s  >" % (str(a), str(b))
 
 	tdop = TransformationDOP()
-	print 'gr', tdop
 	for tree1, tree2 in corpus:
 		tdop.add_to_grammar(linked_subtrees_to_probabilistic_rules(
 					minimal_linked_subtrees(tree1, tree2)))
-	print 'a2gr', tdop.get_grammar()
+		tdop.add_to_grammar(linked_subtrees_to_probabilistic_rules(
+					minimal_linked_subtrees(tree2, tree1)))
+	#print 'grammar', tdop.get_grammar()
 	parser = InsideChartParser(tdop.get_grammar())
 	print 'done'
 	parsetree = parser.parse("John bought a car".split())
 	print parsetree
 	print tdop.get_mlt_deriv(parsetree)
 
+	#basic REPL
 	while True:
 		print 'sentence:',
 		a=raw_input()
 		try:
 			parsetree = parser.parse(a.split())
-		except:
-			parsetree = None
-		print "source:", parsetree
-		if parsetree:
+			print "source:", parsetree
 			print "transformed:", tdop.get_mlt_deriv(parsetree)
+		except:
+			pass
 
-
-test3()
+if __name__ == '__main__':
+        import doctest
+        # do doctests, but don't be pedantic about whitespace
+        fail, attempted = doctest.testmod(verbose=False,
+        optionflags=doctest.NORMALIZE_WHITESPACE | doctest.ELLIPSIS)
+        if attempted and not fail:
+                print "%d doctests succeeded!" % attempted
+        main()
 
 # (Tree('NP@0', ['DET@1', 'N@2']), Tree('NP@0', ['DET@1', 'N@2']))
 # (Tree('DET@1', ['a']), Tree('DET@1', ['a']))
