@@ -40,7 +40,7 @@
 % \citep{chomsky} => (Chomsky 1967)
 
 \newtheorem{theorem}{Theorem}[section]
-\newtheorem{corollary}{Corollary}[section]
+\newtheorem{corollary}[theorem]{Corollary}
 
 \theoremstyle{definition}
 
@@ -588,7 +588,7 @@ The `Goodman-like' reduction leads to the same left hand side and right hand sid
 
 \begin{proof}
 The probability of a left (or right) hand side parse is simply the sum of all joint parse
-probabilities with that left (or right) hand side. Because the joint parse probabilities stay the same, so do the left (and right) hand side probabilities.
+probabilities with that left (or right) hand side. Because the joint parse probabilities are invariant, so are the left (and right) hand side parse probabilities.
 \end{proof}
 
 \begin{corollary}
