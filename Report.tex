@@ -466,7 +466,7 @@ pairs derived from it.
 
 \begin{proof}
 
-Assume that there is a pair of linked trees $\langle T_1, T_2 \rangle$ for
+Assume (towards a contradiction) that there is a pair of linked trees $\langle T_1, T_2 \rangle$ for
 which this is not possible, given a certain bag of linked subtree pairs. Then
 there has to be some linked pair of subtrees $\langle t_1, t_2 \rangle$ for
 which:
@@ -481,10 +481,19 @@ which:
 It is impossible that this pair of subtrees is itself minimal: if it were, it
 could trivially be constructed from linked minimal subtree pairs. So, for this
 case to hold, the linked subtree pair $\langle t_1, t_2 \rangle$ must have a
-proper subset $\langle s_1, s_2 \rangle$.
+proper linked subtree pair $\langle s_1, s_2 \rangle$. When `removing' $\langle
+s_1, s_2 \rangle$ from the linked subtree pairs, we are left with a set of linked
+subtree pairs (zero or one corresponding to the root nodes of $\langle s_1, s_2
+\rangle$, and zero or one corresponding to each frontier node of $\langle s_1, s_2
+\rangle$), from which the linked subtree pair $\langle t_1, t_2 \rangle$ can be
+reconstructed.
 
-\ldots (incomplete but I know how to finish)
-
+So we are now, at least, able to construct the subtree pair $\langle t_1, t_2
+\rangle$ from smaller linked subtree pairs. By assumption, all subtrees of
+$\langle t_1, t_2 \rangle$ can be constructed from minimal subtree pairs. However,
+this implies that $\langle t_1, t_2 \rangle$ can also be constructed from minimal
+subtree pairs -- providing the contradiction to the assumption, and thus completing
+the proof.
 \end{proof}
 
 In other words: just like the PCFG rules can be used as the `building blocks'
@@ -500,16 +509,80 @@ number of nonterminals occurring as leaf nodes (which has to be equal on the
 left and right hand sides). For the root node, and for every nonterminal node,
 either an `addressed' version or a `non-addressed' version can occur.
 
+\subsection{(Joint) parse and derivation probabilities}
+
+An important difference, between the Data Oriented Translation/Transformation framework, and ordinary DOP, is that a `derivation' does not just consist of the building blocks of a single tree, but rather of the combined building blocks of a pair of trees. It is, furthermore, possible that a left-side tree may be the most occuring tree in the set of derivations, but not be the left-side of the most probable joint parse. Take for example the following (abstract) situation:
+
+\ex. \label{abstractexample}
+
+\begin{tabular}{llllll}
+\multicolumn{3}{c}{Tree-pair $\mathcal{A}$: Weight 2} &
+\multicolumn{3}{c}{Tree-pair $\mathcal{B}$: Weight 2} \\
+\begin{parsetree}
+( .A.
+    (.B. (.C. `x'))
+    (.D. (.E. `y'))
+)
+\end{parsetree}
+& $\iff$ &
+\begin{parsetree}
+( .A.
+    (.B. (.D. `x'))
+    (.C. (.E. `y'))
+)
+\end{parsetree}
+&
+\begin{parsetree}
+( .A.
+    (.B. (.C. `x'))
+    (.D. (.E. `y'))
+)
+\end{parsetree}
+& $\iff$ &
+\begin{parsetree}
+( .A.
+    (.B. `x')
+    (.C. (.E. `y'))
+)
+\end{parsetree} \\
+& & \\
+\multicolumn{3}{c}{Tree-pair $\mathcal{C}$: Weight 3} & \\
+\begin{parsetree}
+( .A.
+    (.B. `x')
+    (.D. `y')
+)
+\end{parsetree}
+& $\iff$ &
+\begin{parsetree}
+( .A.
+    (.B. `x')
+    (.C. `y')
+)
+\end{parsetree}
+
+\end{tabular}
+\vspace{1em}
+
+Here the left side of tree-pairs $\mathcal{A}$ and $\mathcal{B}$ is, by itself, the
+most probable left-hand side parse, but the tree pair $\mathcal{C}$ here is the
+most probable joint parse, which seems to be what we are most interested in.
+
+So, instead of simply looking at the most probable parses and derivations (as we would do in the case of ordinary DOP, with or without Goodman reduction), we now have to look at most probable \emph{joint} derivations and parses.
+
 \begin{theorem}
 A `Goodman-like' reduction based on minimal linked subtree pairs leads to
 equivalent parse probabilities (but not equivalent derivation probabilities) as
-the original synchronous DOP model.
+those of the original synchronous DOP (DOT) model.
 \end{theorem}
+
+\begin{proof}
+The proof of this theorem is exactly analagous to those of Theorem 1 and 2 in \citet{goodman2003efficient}, with the exception that Theorem 1 has to be generalized for
+situations with $n$ frontier nodes, rather than the $2$ from Goodman's paper.
+\end{proof}
 
 \section{Implementation}
 \label{sec:implem}
-
-TBD.
 
 \section{Evaluation}
 \label{sec:eval}
