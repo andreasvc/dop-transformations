@@ -497,26 +497,26 @@ subtree pairs -- providing the contradiction to the assumption, and thus complet
 the proof.
 \end{proof}
 
-In other words: just like the PCFG rules can be used as the `building blocks'
+In other words: just like the PCFG rules can be used as `building blocks'
 for the Goodman reduction, the minimal linked subtree pairs as defined above
 can be used as the `building blocks' for a similar reduction. It should be
 noted that, for all means and purposes, such minimal subtrees can be worked
 with, as if they were simple CFG-rules, that just happen to have an additional
 internal structure (which is ignored by the parser).
 
-Like in the Goodman-reduction, we replace every elementary tree (i.e. every
-minimal linked subtree pair) with $2^{(k+1)}$ annotated minimal linked subtree pairs,
+Like in the Goodman-reduction, we replace every elementary tree-pair (i.e. every
+minimal linked subtree pair) with $2^{(k+1)}$ partially annotated minimal linked subtree pairs,
 where $k$ is the
 number of nonterminals occurring as frontier nodes (which has to be equal on the
 left and right hand sides). For the root node, and for every nonterminal node,
 either an `addressed' version or a `non-addressed' version can occur.
 
-The probability of a minimal linked subtree pair, with a root node (either addressed
+The probability of a partially annotated minimal linked subtree pair, with a root node (either addressed
 or non-addressed) $R$, and addressed frontier nodes $X_1, \ldots X_n$, will be
 \begin{displaymath}
 \frac{n(X_1) \cdot \ldots \cdot n(X_n)}{n(R)}
 \end{displaymath}
-where $n(K)$ is the number of linked subtree pairs headed by the node $K$.
+where $n(K)$ is the number of linked subtree pairs headed by the node $K$. (In the case of addressed nodes $K$, this is the number of lined subtree pairs headed by that specific node, whereas in the case of a non-addressed root-node $R$, this is the number of all linked subtree pairs headed by nodes with the label $R$.)
 
 \subsection{(Joint) parse and derivation probabilities}
 
