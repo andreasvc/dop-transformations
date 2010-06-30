@@ -40,6 +40,7 @@
 % \citep{chomsky} => (Chomsky 1967)
 
 \newtheorem{theorem}{Theorem}[section]
+\newtheorem{corollary}{Corollary}[section]
 
 \theoremstyle{definition}
 
@@ -528,7 +529,7 @@ An important difference, between the Data Oriented Translation/Transformation fr
 \begin{parsetree}
 ( .A.
     (.B. (.C. `x'))
-    (.D. (.E. `y'))
+    (.D. (.E. `z'))
 )
 \end{parsetree}
 &
@@ -542,7 +543,7 @@ An important difference, between the Data Oriented Translation/Transformation fr
 \begin{parsetree}
 ( .A.
     (.B. `x')
-    (.D. (.E. `y'))
+    (.D. (.E. `z'))
 )
 \end{parsetree} \\
 & & \\
@@ -556,8 +557,8 @@ An important difference, between the Data Oriented Translation/Transformation fr
 & $\iff$ &
 \begin{parsetree}
 ( .A.
-    (.B. `x')
-    (.D. `y')
+    (.B. `w')
+    (.D. `z')
 )
 \end{parsetree}
 
@@ -566,9 +567,9 @@ An important difference, between the Data Oriented Translation/Transformation fr
 
 Here the left side of tree-pairs $\mathcal{A}$ and $\mathcal{B}$ is, by itself, the
 most probable left-hand side parse, but the tree pair $\mathcal{C}$ here is the
-most probable joint parse, which seems to be what we are most interested in.
+most probable joint parse.
 
-So, instead of simply looking at the most probable parses and derivations (as we would do in the case of ordinary DOP, with or without Goodman reduction), we now have to look at most probable \emph{joint} derivations and parses.
+So, instead of simply looking at the most probable parses and derivations (as we would do in the case of ordinary DOP, with or without Goodman reduction), we can now look at the most probable \emph{joint} derivations and parses. Whether we are, ultimately, most interested in the most probable joint parses, the most probable left hand side parses, or the most probable right hand side parses, can be subject to discussion. It may be argued that, ultimately, we are most interested in the most probable parse on the target side -- or perhaps even in the most probable \emph{sentence} on the target side.
 
 \begin{theorem}
 A `Goodman-like' reduction based on minimal linked subtree pairs leads to
@@ -581,7 +582,27 @@ The proof of this theorem is exactly analagous to those of Theorem 1 and 2 in \c
 situations with $n$ frontier nodes, rather than the $2$ from Goodman's paper.
 \end{proof}
 
+\begin{corollary}
+The `Goodman-like' reduction leads to the same left hand side and right hand side parse probabilities as those of the original synchronous DOP model.
+\end{corollary}
+
+\begin{proof}
+The probability of a left (or right) hand side parse is simply the sum of all joint parse
+probabilities with that left (or right) hand side. Because the joint parse probabilities stay the same, so do the left (and right) hand side probabilities.
+\end{proof}
+
+\begin{corollary}
+The `Goodman-like' reduction leads to the same target side sentence probabilities as those of the original synchronous DOP model.
+\end{corollary}
+
+\begin{proof}
+This follows from the fact that the sentence probability of a sentence $s$ is simply the sum of all joint parse probabilities of tree pairs which, on the target side, yield $s$.
+\end{proof}
+
 \section{Implementation}
+
+Because of complexity issues, we have decided not to compute the most probable joint parses of sentences, but simply compute the most probable joint derivation.
+
 \label{sec:implem}
 
 \section{Evaluation}
