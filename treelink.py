@@ -1,4 +1,5 @@
 from bitpar import BitParChartParser
+from memoize import memoize
 from nltk import Tree, WeightedProduction, WeightedGrammar, \
 	InsideChartParser, FreqDist, WordNetLemmatizer, Nonterminal
 from itertools import chain, combinations
@@ -220,6 +221,7 @@ def count(our_node, linked_subtrees):
 				c in dict(frontier_nodes(a)).keys()])
 	return -1
 
+@memoize
 def frontier_nodes(tree):
 	if frontier_node(tree):
 		return [(tree.node, ())]
@@ -315,10 +317,11 @@ def runexp():
 	corpus = zip(map(Tree, open("corpus/trees-decl")), 
 			map(Tree, open("output-trees")))
 	print 'corpus:'
-	for a,b in corpus: print "< %s, %s  >" % (str(a), str(b))
+	# for a,b in corpus: print "< %s\n %s  >\n\" % (str(a), str(b))
 
 	tdop = TransformationDOP()
-	for tree1, tree2 in corpus:
+	for n, (tree1, tree2) in enumerate(corpus):
+		print n
 		tdop.add_to_grammar(linked_subtrees_to_probabilistic_rules(
 					minimal_linked_subtrees(tree1, tree2)))
 		tdop.add_to_grammar(linked_subtrees_to_probabilistic_rules(
@@ -328,9 +331,11 @@ def runexp():
 	print 'done'
 	parsetree = parser.parse("He says individuals should consider not just stocks but other long-term investments , such as high-quality bonds .".split())
 	print parsetree
-	print tdop.get_mlt_deriv(parsetree)
+	result = tdop.get_mlt_deriv(parsetree)
+	print result
+	print result.leaves()
 
-def main():
+def interface():
 	corpus = """(S (NP John) (VP (V bought) (NP (DET a) (N car))))
 (S (VBZ did) (NP John) (VP (V buy) (NP (DET a) (N car))))
 (S (NP Mary) (VP (VBZ is) (ADJP (JJ happy))))
@@ -365,6 +370,10 @@ def main():
 			print "transformed:", tdop.get_mlt_deriv(parsetree)
 		except:
 			pass
+
+def main():
+	#interface()
+	runexp()
 
 if __name__ == '__main__':
         import doctest
