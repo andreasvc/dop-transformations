@@ -550,7 +550,7 @@ An important difference, between the Data Oriented Translation/Transformation fr
 & $\iff$ &
 \begin{parsetree}
 ( .A.
-    (.B. `x')
+    (.C. `x')
     (.D. (.E. `z'))
 )
 \end{parsetree} \\
@@ -558,15 +558,15 @@ An important difference, between the Data Oriented Translation/Transformation fr
 \multicolumn{3}{c}{Tree-pair $\mathcal{C}$: Weight 3} & \\
 \begin{parsetree}
 ( .A.
-    (.B. `x')
-    (.D. `y')
+    (.C. `x')
+    (.E. `y')
 )
 \end{parsetree}
 & $\iff$ &
 \begin{parsetree}
 ( .A.
-    (.B. `w')
-    (.D. `z')
+    (.C. `w')
+    (.E. `z')
 )
 \end{parsetree}
 
@@ -577,7 +577,7 @@ Here the left side of tree-pairs $\mathcal{A}$ and $\mathcal{B}$ is, by itself, 
 most probable left-hand side parse, but the tree pair $\mathcal{C}$ here is the
 most probable joint parse.
 
-So, instead of simply looking at the most probable parses and derivations (as we would do in the case of ordinary DOP, with or without Goodman reduction), we can now look at the most probable \emph{joint} derivations and parses. Whether we are, ultimately, most interested in the most probable joint parses, the most probable left hand side parses, or the most probable right hand side parses, can be subject to discussion. It may be argued that, ultimately, we are most interested in the most probable parse on the target side -- or perhaps even in the most probable \emph{sentence} on the target side.
+So, instead of simply looking at the most probable parses and derivations (as we would do in the case of ordinary DOP, with or without Goodman reduction), we can now look at the most probable \emph{joint} derivations and parses. Whether we are, ultimately, most interested in the most probable joint parses, the most probable left hand side parses, or the most probable right hand side parses, can be subject to discussion. It may be argued that, ultimately, we are most interested in the most probable parse on the target side -- or perhaps even in the most probable \emph{sentence} on the target side. For now, the outcome of this discussion is not important to us: we simply use the equivalence between joint parse probabilities as a base case, from which the equivalence between left and right hand side probabilities, and target side sentence probabilities can be easily derived.
 
 \begin{theorem}
 A `Goodman-like' reduction based on minimal linked subtree pairs leads to
