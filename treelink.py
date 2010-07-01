@@ -311,6 +311,25 @@ def test2():
 		for c in b: print c
 		print
 
+def runexp():
+	corpus = zip(map(Tree, open("corpus/trees-decl")), 
+			map(Tree, open("output-trees")))
+	print 'corpus:'
+	for a,b in corpus: print "< %s, %s  >" % (str(a), str(b))
+
+	tdop = TransformationDOP()
+	for tree1, tree2 in corpus:
+		tdop.add_to_grammar(linked_subtrees_to_probabilistic_rules(
+					minimal_linked_subtrees(tree1, tree2)))
+		tdop.add_to_grammar(linked_subtrees_to_probabilistic_rules(
+					minimal_linked_subtrees(tree2, tree1)))
+	#print 'grammar', tdop.get_grammar()
+	parser = InsideChartParser(tdop.get_grammar())
+	print 'done'
+	parsetree = parser.parse("He says individuals should consider not just stocks but other long-term investments , such as high-quality bonds .".split())
+	print parsetree
+	print tdop.get_mlt_deriv(parsetree)
+
 def main():
 	corpus = """(S (NP John) (VP (V bought) (NP (DET a) (N car))))
 (S (VBZ did) (NP John) (VP (V buy) (NP (DET a) (N car))))
