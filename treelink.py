@@ -417,7 +417,7 @@ def run(tdop, sents, file, trees=False):
 				print n, e
 				result = None
 			#print "transformed", result
-			resultfd.inc(" ".join(result.leaves()), count=b.prob())
+			resultfd.inc(" ".join(result.leaves()), count=parsetrees[b])
 		if parsetrees:
 			results.append("\n".join("[p=%s] %s" % (repr(prob), words) for words, prob in resultfd.items()) + "\n")
 			print results[-1]
