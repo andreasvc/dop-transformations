@@ -2,7 +2,8 @@ from bitpar import BitParChartParser
 from memoize import memoize
 from nltk import Tree, WeightedProduction, WeightedGrammar,\
 	ViterbiParser, FreqDist, WordNetLemmatizer, Nonterminal, ImmutableTree
-from itertools import chain, combinations
+from itertools import chain, combinations, product
+from operator import mul
 from collections import defaultdict
 from sys import argv
 
@@ -14,6 +15,8 @@ current_id = 1
 class TransformationDOP:
 	def __init__(self):
 		self.grammardict = defaultdict(FreqDist)
+		self.mygrammardict = defaultdict(FreqDist)
+		self.fd = FreqDist()
 
 	def add_to_grammar(self, mlsts, source="left"):
 		# Adds the minimal linked subtrees (mlsts) to the grammar.
@@ -25,11 +28,18 @@ class TransformationDOP:
 			flattened_tree = my_flatten(lefttree)
 			index = filter(lambda x: len(x.rhs()) > 0, flattened_tree.productions())[0]
 			self.grammardict[index].inc((righttree, links), count)
-	def add_words(self, words):
-		# Adds words to the grammar to increase coverage. 
-		# Word should include tag, eg. Tree(NN, ['motorcycle'[)
-		for word in words:
-			self.grammardict[word].inc((word, []), 1)
+			self.mygrammardict[lefttree.freeze()].inc((righttree, links), count)
+			self.fd.inc(index.lhs(), count=float(count))
+
+	def extendlex(self, corpus):
+		# collect all preterminals and terminals from corpus, add them as linked subtrees
+		# note: while this increases coverage, it produces incorrectly conjugated verbs.
+		for a in chain(*corpus):
+			for x in a.productions():
+				if len(x.rhs()) > 0 and '' not in map(str, x.rhs()) and not all(isinstance(y, Nonterminal) for y in x.rhs()):
+					self.grammardict[x].inc((production_to_tree(x).freeze(), ()), 1)
+					self.mygrammardict[production_to_tree(x).freeze()].inc((production_to_tree(x).freeze(), ()), 1)
+					self.fd.inc(x.lhs(), count=1.)
 
 	def print_grammar(self):
 		for (key, value) in self.grammardict.items():
@@ -46,17 +56,14 @@ class TransformationDOP:
 		#for (key, value) in self.grammardict.items():
 		#	grammar.append(WeightedProduction(key.lhs(), key.rhs(), prob=freqfn([count for tree, links, count in value])))
 		# return grammar
-		grammar = [ WeightedProduction(key.lhs(), key.rhs(), prob=freqfn(value.values())) for key, value in self.grammardict.items() ]
+		#grammar = [ WeightedProduction(key.lhs(), key.rhs(), prob=freqfn(value.values())) for key, value in self.grammardict.items() ]
+		grammar = [ WeightedProduction(key.lhs(), key.rhs(), prob=freqfn(count for (tree, links), count in value.items())) for key, value in self.grammardict.items() ]
 		if prob:
-			fd = FreqDist()
-			for key in grammar:
-				fd.inc(key.lhs(), count=key.prob())
-			#fd = FreqDist((key.lhs(), key.prob()) for key in grammar)
 			if bitpar:
 				lexicon = list(reduce(chain, ((a for a in key.rhs() if not isinstance(a, Nonterminal)) for key in self.grammardict)))
 				grammar = []
 				for key, value in self.grammardict.items():
-					count = freqfn(count for (t,l), count in value.items())
+					count = freqfn(value.values())
 					tmp = forcepos(production_to_tree(key))
 					tmp.chomsky_normal_form()
 					for a in tmp.productions():
@@ -65,13 +72,87 @@ class TransformationDOP:
 				return grammar, lexicon
 			else:
 				grammar = [WeightedProduction(key.lhs(), key.rhs(), 
-					prob=freqfn(count for (tree, links), count in value.items()) / float(fd[key.lhs()]))
+					prob=freqfn(value.values()) / self.fd[key.lhs()])
 					for key, value in self.grammardict.items()]
 				return WeightedGrammar(Nonterminal(root), grammar)
 		else:
 			return grammar
+	
+	def get_my_grammar(self, bitpar=False, root="S"):
+		grammar = FreqDist()
+		lexicon = list(reduce(chain, (tree.leaves() for tree in self.mygrammardict)))
+		for key, value in self.mygrammardict.items():
+			count = max(value.values())
+			tmp = Tree.convert(key)
+			if bitpar: forcepos(tmp).chomsky_normal_form()
+			for a in tmp.productions():
+				if len(a.rhs()):
+					if bitpar:
+					# fixme: proper goodman frequencies here of course
+						grammar.inc("%s\t%s" % (str(a.lhs()), "\t".join(map(str, a.rhs()))), count)
+					else:
+						grammar.inc(a, count)
+		if bitpar:
+			return grammar.items(), lexicon
+		fd = FreqDist()
+		for k,v in grammar.items(): fd.inc(k.lhs(), v)
+		return WeightedGrammar(Nonterminal(root), [WeightedProduction(k.lhs(), k.rhs(), prob=v/float(fd.get(k.lhs(),v))) for k,v in grammar.items()])
+		
+			
+	def my_mlt_deriv(self, tree):
+		# translation using subtrees instead of flattened trees
+		def match(tree, candidate):
+			# walk through candidate and compare to tree
+			for idx in candidate.treepositions():
+				try:
+					if tree[idx] == candidate[idx]: continue
+					if tree[idx].node <> candidate[idx].node: return False
+					if len(candidate[idx]) not in (0, len(tree[idx])): return False
+				except: return False
+			return True
 
-
+		yielded = False
+		for candidate in self.mygrammardict:
+			if match(tree, candidate):
+				#print "candidate", candidate,
+				#righttree, links = self.mygrammardict[candidate].max()
+				for righttree, links in self.mygrammardict[candidate]:
+					count = self.mygrammardict[candidate][(righttree, links)]
+					lhscount = self.fd.get(Nonterminal(candidate.node), count)
+					target = Tree.convert(righttree)
+					lfrontiers = list(frontier_nodes(candidate))
+					frontiers = list(frontier_nodes(righttree))
+					#new_subtree_forest = product(*(self.my_mlt_deriv(tree[a[1]]) for a in lfrontiers))
+					#new_subtree_forest = list(product(*[list(self.my_mlt_deriv(tree[a[1]])) for a in lfrontiers]))
+					#print lfrontiers
+					if not lfrontiers:
+						#print 'yielding', target
+						yield target, count / lhscount
+						yielded = True
+						continue
+					new_subtree_forest = []
+					for a in lfrontiers:
+						new_subtree_forest.append(list(self.my_mlt_deriv(tree[a[1]])))
+						#print "subtrees for", tree[a[1]], new_subtree_forest[-1]
+					if [] in new_subtree_forest: print "no cigar", tree[lfrontiers[new_subtree_forest.index([])][1]]
+					new_subtree_forest = product(*new_subtree_forest)
+					for new_subtrees in new_subtree_forest:
+						for (subtree, freq), index in zip(new_subtrees, links):
+							target[frontiers[index][1]] = subtree
+						prob = count / lhscount * reduce(mul, (a[1] for a in new_subtrees), 1)
+						#print 'yielding', target
+						yield target, prob
+						yielded = True
+						if target.node == "top": break # stop deriving after first full derivation
+					else: continue # with other right trees
+					break
+				else: continue # with other candidates (left trees)
+				break
+		if not yielded and tree.node not in ("top", "s"):
+			#found nothing, do smoothing
+			print "giving up on", tree
+			yield tree, 1
+				
 	def get_mlt_deriv(self, tree, smoothing=False):
 		# Returns the most likely transformation of tree (based on the most likely derivation).
 		top_production = tree.productions()[0]
@@ -83,30 +164,32 @@ class TransformationDOP:
 				righttree, links, count = curtree, curlinks, curcount"""
 		if top_production in self.grammardict:
 			#righttree, links = self.grammardict[top_production].max()
-			candidates = self.grammardict[top_production].keys()
-		elif smoothing and len(top_production.rhs()) == 1 and not isinstance(top_production.rhs(), Nonterminal):
+			candidates = self.grammardict[top_production].items()
+		elif smoothing and len(top_production.rhs()) == 1 and not isinstance(top_production.rhs()[0], Nonterminal):
 			# assume words are the same
 			#righttree, links = tree, []
-			candidates = [(tree, [])]
-		#elif smoothing:
-		#	righttree, links = production_to_tree(top_production), []	
+			print "lex not found", top_production
+			candidates = [((tree, []), 1)]
+		elif smoothing:
+			print "not found", top_production
+			candidates = [((production_to_tree(top_production), range(len([a for a in tree if isinstance(a, Tree)]))), 1)]
 		else: 
 			print "not found", top_production
 			raise ValueError
+		if top_production.lhs() in self.fd: lhscount = self.fd[top_production.lhs()]
+		else: lhscount = 1
 
-		new_subtrees = []
-		for a in tree:
-			if isinstance(a, Tree):
-				new_subtrees.append(self.get_mlt_deriv(a, smoothing))
+		new_subtrees = [self.get_mlt_deriv(a, smoothing) for a in tree if isinstance(a, Tree)]
 
 		# Add new subtrees
-		for righttree, links in candidates:
+		for (righttree, links), count in candidates:
 			frontiers = list(frontier_nodes(righttree))
 			target = Tree.convert(righttree)
 			for n, index in enumerate(links):
 				#print index, n, target[frontiers[index][1]], '/', new_subtrees[n]
-				target[frontiers[index][1]] = new_subtrees[n]
-			return target
+				target[frontiers[index][1]] = new_subtrees[n][0]
+			prob = count / lhscount * reduce(mul, (a[1] for a in new_subtrees), 1)
+			return target, prob
 
 
 def minimal_linked_subtrees(tree1, tree2):
@@ -139,9 +222,13 @@ def minimal_linked_subtrees(tree1, tree2):
 				if isinstance(i, Tree) and len(i) == 1 and type(i[0]) == str:
 					for (parent2, num2, j) in my_subtrees(tree2):
 						if (isinstance(j, Tree) and
-							i.node == j.node and i.node[0] in 'Vv' and # starts with V
+							# disabled, VB and VBD should be linked as well:
+							#i.node == j.node and i.node[0] in 'Vv' and # starts with V
 							len(j) == 1 and type(j[0]) == str and
 							wnl.lemmatize(i[0], 'v') == wnl.lemmatize(j[0], 'v')):
+								# coerce label to be equivalent, so that the link is explicit
+								j.node = i.node 
+								print "lemmatized", i[0], "<=>", j[0]
 								lemmatized_equivalents = (i, j, parent1, num1,
 									parent2, num2)
 
@@ -213,14 +300,14 @@ def linked_subtrees_to_probabilistic_rules(linked_subtrees, limit_subtrees=1000)
 				newtree1[l].node = rmid(str(newtree1[l].node))
 				newtree2[r].node = rmid(str(newtree2[r].node))
 			newtrees.append((newtree1, newtree2, links,
-				product(count(leaf, linked_subtrees) for leaf in leaves)))
+				reduce(mul, (count(leaf, linked_subtrees) for leaf in leaves), 1)))
 			if "@" in newtree1.node:
 				newtree1a = newtree1.copy(True)
 				newtree2a = newtree2.copy(True)
 				newtree1a.node = rmid(str(newtree1.node))
 				newtree2a.node = rmid(str(newtree2.node))
 				newtrees.append((newtree1a, newtree2a, links,
-					product(count(leaf, linked_subtrees) for leaf in leaves)) )
+					reduce(mul, (count(leaf, linked_subtrees) for leaf in leaves), 1)) )
 	return newtrees
 
 def leaves_and_frontier_nodes(tree):
@@ -238,8 +325,8 @@ def my_flatten(tree):
 def count(our_node, linked_subtrees):
 	for (a, b) in linked_subtrees:
 		if str(a.node) == our_node:
-			return product(count(str(c), linked_subtrees) + 1 for
-				c in set(x for x,y in frontier_nodes(a)))
+			return reduce(mul, (count(str(c), linked_subtrees) + 1 for
+				c in set(x for x,y in frontier_nodes(a))), 1)
 				#c in set(x for x,y in dict(frontier_nodes(a)).keys())
 	return -1
 
@@ -262,9 +349,6 @@ def frontier_nodes(tree):
 
 def frontier_node(tree):
 	return isinstance(tree, Tree) and len(tree) == 0
-
-def product(l):
-	return reduce(lambda x, y: x * y, l, 1)
 
 def sublists(l):
 	# ordered from big to small:
@@ -334,19 +418,47 @@ def test():
 	return a
 
 def test2():
-	tree1 = Tree("(S (NP mary) (VP walks))")
-	tree2 = Tree("(S (VBZ did) (NP mary) (VP walk))")
+	tree1 = Tree("(TOP (SQ (VBD Did) (NP (PRP I)) (VP (VB buy) (NP (PRP it))) (. ?)))")
+	tree2 = Tree("(TOP (S (NP (PRP I)) (VP (VBD bought) (NP (PRP it))) (. .)))")
 	t = minimal_linked_subtrees(tree1, tree2)
+	print "\nminimal linked subtrees"
 	for a,b in t: print a,b
+	print "end\n"
 	t2 = linked_subtrees_to_probabilistic_rules(t)
-	print
-	print
+	print "\nlinked subtrees to probabilistic rules"
 	for b in t2:
 		for c in b: print c
 		print
-	gr = TransformationDOP()
-	gr.add_to_grammar(t2)
-	gr.print_grammar()
+	tdop = TransformationDOP()
+	tdop.add_to_grammar(t2)
+	print "DOT grammar"
+	tdop.print_grammar()
+	tree = Tree("(TOP Did (NP (NNP Mr.) (NNP Freeman)) (VP (VB have) (NP (NP (VB notice)) (PP (IN of) (NP (DT this))))) ?)")
+	tree1 = Tree("(TOP (SQ (VBD Did) (NP (NNP Mr.) (NNP Freeman)) (VP (VB have) (NP (NP (VB notice)) (PP (IN of) (NP (DT this))))) (. ?)))")
+	tdop.extendlex([(tree1, tree1)])
+	parser = ViterbiParser(tdop.get_grammar(root="TOP"))
+	print "1"
+	t,p = tdop.get_mlt_deriv(tree, smoothing=True)
+	print parser.grammar()
+	print p, t
+	try:
+		t,p = tdop.get_mlt_deriv(parser.parse("Did Mr. Freeman have notice of this ?".split()), smoothing=True)
+		print p, t
+	except Exception as e:
+		print e
+	print "2"
+	tree = Tree("(TOP (SQ (VBD Did) (NP (NNP Mr.) (NNP Freeman)) (VP (VB have) (NP (NP (VB notice)) (PP (IN of) (NP (DT this))))) (. ?)))")
+	t,p = list(tdop.my_mlt_deriv(tree1))[0]
+	print p, t
+	parser = ViterbiParser(tdop.get_my_grammar(root="TOP"))
+	print parser.grammar()
+	try:
+		tree1 = parser.parse("Did Mr. Freeman have notice of this ?".split())
+		t,p = list(tdop.my_mlt_deriv(tree1))[0]
+		print p, t
+	except Exception as e:
+		print e
+	
 
 def forcepos(tree):
 	""" make sure all terminals have POS tags; 
@@ -365,36 +477,21 @@ def removeforcepos(tree):
 			result[a[:-1]] = tree[a]
 	return result
 
-def extendlex(corpus, rules, lexicon):
-	newrules, newlex = FreqDist(), set()
-	for a,b in corpus:
-		newlex.update(a.leaves())
-		newlex.update(b.leaves())
-		for x in a.productions():
-			if len(x.rhs()) > 0 and '' not in map(str, x.rhs()) and not all(isinstance(y, Nonterminal) for y in x.rhs()):
-				newrules.inc("%s	%s" % (str(x.lhs()), "\t".join(str(y) for y in x.rhs())))
-		for x in b.productions():
-			if len(x.rhs()) > 0 and '' not in map(str, x.rhs()) and not all(isinstance(y, Nonterminal) for y in x.rhs()):
-				newrules.inc("%s	%s" % (str(x.lhs()), "\t".join(str(y) for y in x.rhs())))
-		#for x in a.treepositions('leaves'):
-		#	newrules.inc("%s	%s" % (a[x[:-1]].node, a[x]))
-		#for x in b.treepositions('leaves'):
-		#	newrules.inc("%s	%s" % (b[x[:-1]].node, b[x]))
-	rules.extend(newrules.items())
-	lexicon.extend(newlex)
-
-def run(tdop, sents, file, trees=False):
+def run(tdop, sents, file, trees=False, getpos=None, my=False):
 	if not trees:
+		if getpos: tdop.extendlex(getpos)
 		#parser = ViterbiParser(tdop.get_grammar(root="top"))
-		rules, lexicon = tdop.get_grammar(bitpar=True, freqfn=sum)
-		#extendlex(corpus[10:], rules, lexicon)
+		if my:
+			rules, lexicon = tdop.get_my_grammar(bitpar=True)
+		else:
+			rules, lexicon = tdop.get_grammar(bitpar=True, freqfn=sum)
 		parser = BitParChartParser(rules, lexicon, name="tdop", cleanup=False, rootsymbol="top", unknownwords="unknownwords", n=1000)
 		print 'grammar done'
 	results = []
 	for n, a in enumerate(sents):
 		if trees:
 			print n, "source", " ".join(a.leaves())
-			parsetrees = [a]
+			parsetrees = {a.freeze() : 1}
 		else:
 			print n, "source", a
 			try:
@@ -405,20 +502,27 @@ def run(tdop, sents, file, trees=False):
 			parsetrees = FreqDist()
 			for b in parsetrees1: 
 				b.un_chomsky_normal_form()
-				parsetrees.inc(ImmutableTree.convert(undecorate_with_ids(removeforcepos(b))), count=b.prob())
-			#parsetrees = FreqDist(undecorate_with_ids(removeforcepos(a)).freeze() for a in parsetrees)
-			#print "parsed", parsetree
+				#parsetrees.inc(ImmutableTree.convert(undecorate_with_ids(removeforcepos(b))), count=b.prob())
+				parsetrees.inc(ImmutableTree.convert(removeforcepos(b)), count=b.prob())
+			print "parsetrees:", len(parsetrees)
 		resultfd = FreqDist()
 		for b in parsetrees:
+			if my:
+				for result, prob in list(tdop.my_mlt_deriv(b)):
+					resultfd.inc(" ".join(result.leaves()), count=parsetrees[b] * prob)
+					break	# one translation is enough
+				else: continue # try another parse tree
+				break # skip other parse trees
 			try:
-				result = tdop.get_mlt_deriv(b, smoothing=True)
+				result, prob = tdop.get_mlt_deriv(b, smoothing=True)
 			except Exception as e:
 				print "mlt failed",
 				print n, e
 				result = None
 			#print "transformed", result
-			resultfd.inc(" ".join(result.leaves()), count=parsetrees[b])
-		if parsetrees:
+			else:
+				resultfd.inc(" ".join(result.leaves()), count=parsetrees[b] * prob)
+		if parsetrees and resultfd:
 			results.append("\n".join("[p=%s] %s" % (repr(prob), words) for words, prob in resultfd.items()) + "\n")
 			print results[-1]
 		else:
@@ -433,7 +537,9 @@ def runexp():
 	treesdecl = map(lambda x: Tree(x.lower()), open("corpus/trees-decl3.txt"))
 	trees_tdop_parsed = map(lambda x: undecorate_with_ids(Tree(x.lower())), open("trees.txt"))
 
-	"""tmp = zip(sentsinter, zip(treesinter, treesdecl))
+	"""
+	# sort everything by length
+	tmp = zip(sentsinter, zip(treesinter, treesdecl))
 	tmp.sort(key=lambda x: len(x[0]))
 	sentsinter = [a[0] for a in tmp]
 	treesinter = [a[1][0] for a in tmp]
@@ -450,21 +556,27 @@ def runexp():
 	#cPickle.dump(tdop.grammardict, open("tdop.pickle","wb"), -1)
 	print "training done"
 
-	run(tdop, sentsinter[-20:], "results1.txt")
-	#run(tdop, trees_tdop_parsed[-20:], "results2.txt", trees=True)
+	run(tdop, trees_tdop_parsed, "results0.txt", getpos=list(zip(treesinter, treesdecl))[-20:], trees=True)
+	run(tdop, sentsinter[-20:], "results1.txt", getpos=list(zip(treesinter, treesdecl))[-20:])
+	run(tdop, treesinter[-25:], "results2.txt", getpos=list(zip(treesinter, treesdecl))[-20:], trees=True, my=True)
+	run(tdop, sentsinter[-25:], "results3.txt", getpos=list(zip(treesinter, treesdecl))[-20:], my=True)
 
 def interface():
-	corpus = """(S (NP John) (VP (V bought) (NP (DET a) (N car))))
-	(S (VP (VBZ did)) (NP John) (VP (V buy) (NP (DET a) (N car))))
+	corpus = """(S (NP John) (VP (V bought) (NP (DT a) (N car))))
+	(S (VP (VBZ did)) (NP John) (VP (V buy) (NP (DT a) (N car))))
 	(S (NP Mary) (VP (VBZ is) (ADJP (JJ happy))))
 	(S (VBZ is) (NP Mary) (ADJP (JJ happy)))
 	(S (NP (NP (DT the) (NN man)) (SBAR (WHNP (WP who)) (S (VP (VBZ is) (VP (VBG talking)))))) (VP (VBZ is) (VP (VBG walking))))
-	(S (VBZ is) (NP (NP (DT the) (NN man)) (SBAR (WHNP (WP who)) (S (VP (VBZ is) (VP (VBG talking)))))) (VP (VBG walking)))"""
-	corpus = map(Tree, corpus.splitlines())
+	(S (VBZ is) (NP (NP (DT the) (NN man)) (SBAR (WHNP (WP who)) (S (VP (VBZ is) (VP (VBG talking)))))) (VP (VBG walking)))
+	(S (NP (NP (NP (DT The) (JJ stock-market) (NNS tremors)) (PP (IN of) (NP (NNP Friday)))) (, ,) (NP (NNP Oct.) (CD 13)) (, ,)) (VP (VP (VBD presaged) (NP (JJR larger) (NN fragility))) (, ,) (NP (ADJP (RB far) (JJR greater)) (NNS upheavals))) (. .))
+	(S (VBD Did) (NP (NP (DT the) (JJ stock-market) (NNS tremors)) (PP (IN of) (NP (NP (NNP Friday)) (, ,) (NP (NNP Oct.) (CD 13)) (, ,)))) (VP (VB presage) (NP (NP (JJR larger) (NN fragility)) (, ,) (NP (ADJP (RB far) (JJR greater)) (NNS upheavals)))) (. ?))"""
+	corpus = map(Tree, corpus.lower().splitlines())
 	corpus = zip(corpus[::2], corpus[1::2])
 	print 'corpus:'
 	for a,b in corpus: print "< %s, %s  >" % (str(a), str(b))
-
+	sent1 = "The stock-market tremors of Friday , Oct. 13 , presaged larger fragility , far greater upheavals ."
+	sent2 = "Did the stock-market tremors of Friday , Oct. 13 , presage larger fragility , far greater upheavals ?"
+	
 	tdop = TransformationDOP()
 	for tree1, tree2 in corpus:
 		m = minimal_linked_subtrees(tree2, tree1)
@@ -472,33 +584,48 @@ def interface():
 		tdop.add_to_grammar(l)
 		tdop.add_to_grammar(linked_subtrees_to_probabilistic_rules(minimal_linked_subtrees(tree1, tree2)))
 	rules, lexicon = tdop.get_grammar(bitpar=True)
-	parser2 = BitParChartParser(rules, lexicon, rootsymbol="S", unknownwords="unknownwords")
-	parser = ViterbiParser(tdop.get_grammar())
+	parser2 = BitParChartParser(rules, lexicon, rootsymbol="s")
+	rules, lexicon = tdop.get_my_grammar(bitpar=True)
+	myparser = BitParChartParser(rules, lexicon, rootsymbol="s", n=1000)
+	#parser = ViterbiParser(tdop.get_grammar())
 	print 'done'
-
 	#basic REPL
 	while True:
 		print 'sentence:',
 		a=raw_input()
 		parsetree = None
+		myparsetree = None
 		try:
 			parsetree = parser.parse(a.split())
 			print "viterbi:", parsetree
 		except Exception as e:
 			print e
 		try:
-			parsetree = parser2.parse(a.split())
+			parsetree = list(parser2.nbest_parse(a.split()))[0]
 			parsetree.un_chomsky_normal_form()
 			parsetree = removeforcepos(parsetree)
-			print "bitpar:", parsetree
+			print "bitpar1:", parsetree
 		except Exception as e:
 			print e
 		try:
-			transformed = tdop.get_mlt_deriv(undecorate_with_ids(parsetree), smoothing=True)
-			print "transformed:", transformed
+			myparsetree = myparser.parse(a.split())
+			myparsetree.un_chomsky_normal_form()
+			myparsetree = removeforcepos(myparsetree)
+			myparsetree = Tree.convert(myparsetree)
+			print "bitpar2:", myparsetree
+			myparsetree = undecorate_with_ids(myparsetree)
+		except Exception as e:
+			print e
+		try:
+			transformed, prob = tdop.get_mlt_deriv(undecorate_with_ids(parsetree), smoothing=True)
+			print "transformed1 (prob=%s): %s" % (repr(prob), transformed)
 			print "words:", " ".join(transformed.leaves())
 		except Exception as e:
 			print e
+		if myparsetree == None: continue
+		for transformed, prob in list(tdop.my_mlt_deriv(myparsetree)):
+			print "transformed (prob=%s): %s" % (repr(prob), transformed)
+			print "words:", " ".join(transformed.leaves())
 
 if __name__ == '__main__':
 	import doctest
