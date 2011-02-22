@@ -274,10 +274,10 @@ class TransformationDOP:
 						for (subtree, freq), index in zip(new_subtrees, links):
 							idx = frontiers[index][1]
 							# check if substitution is on a matching node, 
-							if subtree.node == target[idx].node:
+							if True or subtree.node == target[idx].node:
 								target[frontiers[index][1]] = subtree
 							else:	
-								print "illegal righttree; expected", target[idx].node, "got", subtree
+							#	print "illegal righttree; expected", target[idx].node, "got", subtree
 								break
 						else:
 							prob = count / lhscount * reduce(mul, (a[1] for a in new_subtrees), 1)
@@ -342,7 +342,7 @@ class TransformationDOP:
 					result = munge(deriv, tree, indices)
 					self.mangled[(deriv.freeze(), tree.freeze(), tuple(indices))] = result
 					print "munged", result
-					yield result, prob #* 1 / self.fd[Nonterminal(tree.node)]
+					yield result, prob * score #1 / self.fd[Nonterminal(tree.node)]
 				#	break
 		#elif not yielded: print "no cigar", tree
 				
@@ -846,7 +846,7 @@ def run(tdop, sentsortrees, gold, resultsfile, trees=False, getpos=None, my=Fals
 			try:
 				parsetrees1 = list(parser.nbest_parse(a.split()))
 			except Exception as e:
-				parsetrees = []
+				parsetrees1 = []
 				print n, "parsing failed", e
 			parsetrees = FreqDist()
 			for b in parsetrees1: 
@@ -883,48 +883,53 @@ def run(tdop, sentsortrees, gold, resultsfile, trees=False, getpos=None, my=Fals
 			if parsetrees.keys(): print "not transformed:", parsetrees.keys()[0]
 		resultfds.append(resultfd)
 	print "done"
+	from nltk import edit_distance
+	from nltk.metrics import f_measure, precision, recall
+	def lem(sent):
+		def f(a):
+			if a == "n't": return "not"
+			return a
+		if sent: return tuple([f(wnl.lemmatize(a, "v")) for a in sent])
+		else: return sent
+	lgold = [lem(a.split()) for a in gold]
 	a,b = 0,0
 	dist = []
 	dist1 = []
 	exact = []
-	from nltk import edit_distance
-	from nltk.metrics import f_measure, precision, recall
-	def lem(sent):
-		if sent: return [wnl.lemmatize(a, "v") for a in sent]
-		else: return sent
-	for n, (fd, sent) in enumerate(zip(resultfds, gold)):
-		if lem(fd.max()) == lem(sent): 
+	for n, (fd, sent) in enumerate(zip(resultfds, lgold)):
+		if fd and lem(fd.max().split()) == sent: 
 			a += 1
 			exact.append(n)
-		if lem(sent) in map(lem, fd.keys()): b += 1
+		if sent in (lem(x.split()) for x in fd.keys()): b += 1
 		if fd: 
-			dist.append(min(edit_distance(sent.split(), a.split()) for a in fd))
-			dist1.append(edit_distance(sent.split(), fd.max().split()))
+			dist.append(min(edit_distance(sent, lem(x.split())) for x in fd))
+			dist1.append(edit_distance(sent, lem(fd.max().split())))
 		else: 
-			dist.append(len(sent.split()))
-			dist1.append(len(sent.split()))
+			dist.append(len(sent))
+			dist1.append(len(sent))
 	stats = (
 	"exact match ranked first: %d of %d => %d %%\n" 
 	"exact match of any rank:  %d of %d => %d %%\n" 
-	"f-measure: %f\n" 
-	"precision: %f\n" 
-	"recall: %f\n" 
+	"f-measure: %s\n" 
+	"precision: %s\n" 
+	"recall: %s\n" 
 	"average edit distance (of best matches): %f\n" 
 	"sentences with edit distance < 1: %d\n"
 	"distances of first matches: %s\n"
 	"distances of best matches:  %s\n"
-	"indices of exact matches: %s\n" % (a, len(gold), float(a) / len(gold) * 100, 
+	"indices of exact matches: %s\n" % (
+			a, len(gold), float(a) / len(gold) * 100, 
 			b, len(gold), float(b) / len(gold) * 100, 
-			f_measure(set(gold), set(a.max() for a in resultfds if a)), 
-			precision(set(gold), set(a.max() for a in resultfds if a)),
-			recall(set(gold), set(a.max() for a in resultfds if a)), 
+			repr(f_measure(set(lgold), set(lem(x.max().split()) for x in resultfds if x))), 
+			repr(precision(set(lgold), set(lem(x.max().split()) for x in resultfds if x))),
+			repr(recall(set(lgold), set(lem(x.max().split()) for x in resultfds if x))), 
 			sum(dist) / float(len(dist)), 
-			len([a for a in dist1 if a <= 1]), 
+			len([x for x in dist1 if x <= 1]), 
 			repr(dist1), repr(dist), repr(exact)))
 	print stats
 	results.append(stats)
 	open(resultsfile, "w").writelines(results)
-	return len([a for a in dist1 if a <= 1])
+	return a #len([a for a in dist1 if a <= 1])
 
 def runexp():
 	import cPickle
@@ -971,7 +976,8 @@ def tenfold():
 	treesinter = map(lambda x: Tree(x.lower()), open("corpus/trees-interr3.txt"))
 	treesdecl = map(lambda x: Tree(x.lower()), open("corpus/trees-decl3.txt"))
 	from random import sample
-	matchesi, matchesd = 0, 0
+	matchesi1, matchesd1 = 0, 0
+	matchesi2, matchesd2 = 0, 0
 	for fold in range(10):
 		test = sample(range(len(treesdecl)), 20)
 		train = [a for a in range(len(treesdecl)) if a not in test]
@@ -984,8 +990,8 @@ def tenfold():
 			tdop.add_to_grammar(lin)
 		tdop.sort_grammar(False)
 		print "training done" 
-		matchesi += run(tdop, [treesinter[a] for a in test], [sentsdecl[a] for a in test], ("foldd%d.txt" % fold), getpos=[(treesinter[a], treesdecl[a]) for a in test], trees=True, my=True)
-		#matchesi += run(tdop, [sentsinter[a] for a in test], [sentsdecl[a] for a in test], ("sfoldd%d.txt" % fold), getpos=[(treesinter[a], treesdecl[a]) for a in test], trees=False, my=False)
+		matchesi1 += run(tdop, [treesinter[a] for a in test], [sentsdecl[a] for a in test], ("foldd%d.txt" % fold), getpos=[(treesinter[a], treesdecl[a]) for a in test], trees=True, my=True)
+		#matchesi2 += run(tdop, [sentsinter[a] for a in test], [sentsdecl[a] for a in test], ("sfoldd%d.txt" % fold), getpos=[(treesinter[a], treesdecl[a]) for a in test], trees=False, my=False)
 		tdop = TransformationDOP()
 		for n, (tree1, tree2) in enumerate(corpus):
 			print n
@@ -994,11 +1000,16 @@ def tenfold():
 			tdop.add_to_grammar(lin)
 		tdop.sort_grammar(False)
 		print "training done" 
-		matchesd += run(tdop, [treesdecl[a] for a in test], [sentsinter[a] for a in test], ("foldi%d.txt" % fold), getpos=[(treesdecl[a], treesinter[a]) for a in test], trees=True, my=True)
-		#matchesd += run(tdop, [treesdecl[a] for a in test], [sentsinter[a] for a in test], ("sfoldi%d.txt" % fold), getpos=[(treesdecl[a], treesinter[a]) for a in test], trees=False, my=False)
+		matchesd1 += run(tdop, [treesdecl[a] for a in test], [sentsinter[a] for a in test], ("foldi%d.txt" % fold), getpos=[(treesdecl[a], treesinter[a]) for a in test], trees=True, my=True)
+		#matchesd2 += run(tdop, [sentsdecl[a] for a in test], [sentsinter[a] for a in test], ("sfoldi%d.txt" % fold), getpos=[(treesdecl[a], treesinter[a]) for a in test], trees=False, my=False)
 	print "10 folds, accuracy:"
-	print "inter => decl:", matchesi / 200.0 * 100, "%"
-	print "decl => inter:", matchesd / 200.0 * 100, "%"
+	print "trees:"
+	print "inter => decl:", matchesi1 / 200.0 * 100, "%"
+	print "decl => inter:", matchesd1 / 200.0 * 100, "%"
+	#print
+	#print "sentences:"
+	#print "inter => decl:", matchesi2 / 200.0 * 100, "%"
+	#print "decl => inter:", matchesd2 / 200.0 * 100, "%"
 
 def mungetest():
 	import cPickle
