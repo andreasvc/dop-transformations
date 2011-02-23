@@ -533,7 +533,8 @@ def munge(deriv, tree, notcovered):
 		# try to find its former parent
 		idx = None
 		parent = tree[nc[:-1]].node
-		if len(nc) == 1 and parent == "s": parent = "sq"
+		if len(nc) == 2 and parent == "s": parent = "sq"
+		elif len(nc) == 2 and parent == "sq": parent = "s"
 		if parent in nodes and len(nc) - 1 == len(indices[nodes.index(parent)]):
 			idx = indices[nodes.index(parent)]
 		elif any(x.node in nodes for x in tree[nc[:-1]]):
@@ -548,7 +549,7 @@ def munge(deriv, tree, notcovered):
 			for n in range(1, len(nc)):
 				parent = tree[nc[:-n]].node
 				if len(nc[:-n]) == 1 and parent == "s": parent = "sq"
-				if len(nc[:-n]) == 1 and parent == "sq": parent = "s"
+				elif len(nc[:-n]) == 1 and parent == "sq": parent = "s"
 				if parent in nodes and len(nc) - n == len(indices[nodes.index(parent)]):
 					idx = indices[nodes.index(parent)]
 					break
@@ -832,7 +833,7 @@ def run(tdop, sentsortrees, gold, resultsfile, trees=False, getpos=None, my=Fals
 		if my:
 			rules, lexicon = tdop.get_my_grammar(bitpar=True)
 		else:
-			rules, lexicon = tdop.get_grammar(bitpar=True, freqfn=sum)
+			rules, lexicon = tdop.get_grammar(bitpar=True, freqfn=max)
 		parser = BitParChartParser(rules, lexicon, name="tdop", cleanup=False, rootsymbol="top", unknownwords="unknownwords", n=1000)
 		print 'grammar done'
 	results = []
@@ -859,7 +860,8 @@ def run(tdop, sentsortrees, gold, resultsfile, trees=False, getpos=None, my=Fals
 				for nn, (result, prob) in enumerate(tdop.my_mlt_deriv(b)):
 					resultfd.inc(" ".join(result.leaves()), count=parsetrees[b] * prob)
 					if nn > 100: break
-				if resultfd: break # skip other parse trees
+				#if resultfd: break # skip other parse trees
+				if False: pass
 				else:
 					print "trying partial"
 					for nn, (result, prob) in enumerate(tdop.my_mlt_deriv(b, allowpartial=True)):
@@ -939,7 +941,7 @@ def runexp():
 	treesdecl = map(lambda x: Tree(x.lower()), open("corpus/trees-decl3.txt"))
 	newsentsinter = open("corpus/sentences-interr1.txt").read().lower().splitlines()
 	newtreesdecl = map(lambda x: Tree(x.lower()), open("corpus/trees-decl.txt"))
-	newtreesinter = map(lambda x: Tree(x.lower()), open("corpus/trees-interr1.alt.txt"))
+	newtreesinter = map(lambda x: Tree(x.lower()), open("corpus/trees-interr1.txt"))
 	trees_tdop_parsed = map(lambda x: undecorate_with_ids(Tree(x.lower())), open("trees.txt"))
 
 	corpus = list(zip(newtreesdecl + treesdecl, newtreesinter + treesinter))[:-20]
@@ -950,8 +952,8 @@ def runexp():
 		tdop = TransformationDOP()
 		for n, (tree1, tree2) in enumerate(corpus):
 			print n
-			min = minimal_linked_subtrees(tree1, tree2)
-			lin = linked_subtrees_to_probabilistic_rules(min, limit_subtrees=3)
+			min = minimal_linked_subtrees(tree2, tree1)
+			lin = linked_subtrees_to_probabilistic_rules(min, limit_subtrees=1000)
 			tdop.add_to_grammar(lin)
 		tdop.sort_grammar(False)
 		print "training done" 
@@ -960,9 +962,10 @@ def runexp():
 		pass
 
 	#run(tdop, trees_tdop_parsed, "results0.txt", getpos=list(zip(treesinter, treesdecl))[-20:], trees=True)
-	#run(tdop, sentsdecl[-20:], "results1.txt", getpos=list(zip(treesinter, treesdecl))[-20:])
-	#run(tdop, treesinter[-20:], sentsdecl[-20:], "results2.txt", getpos=list(zip(treesinter, treesdecl))[-20:], trees=True, my=True)
-	run(tdop, treesdecl[-20:], sentsinter[-20:], "results2.txt", getpos=list(zip(treesdecl, treesinter))[-20:], trees=True, my=True)
+	#run(tdop, sentsdecl[-20:], sentsinter[-20:], "results1.txt", getpos=list(zip(treesdecl, treesinter))[-20:])
+	#run(tdop, sentsinter[-20:], sentsdecl[-20:], "results1.txt", getpos=list(zip(treesinter, treesdecl))[-20:])
+	run(tdop, treesinter[-20:], sentsdecl[-20:], "results2.txt", getpos=list(zip(treesinter, treesdecl))[-20:], trees=True, my=True)
+	#run(tdop, treesdecl[-20:], sentsinter[-20:], "results2.txt", getpos=list(zip(treesdecl, treesinter))[-20:], trees=True, my=True)
 	#cPickle.dump(tdop.mangled, open("mangled.pickle","wb"), 1)
 	#tdop.sort_grammar(True)
 	#run(tdop, sentsinter[-20:], sentsdecl[-20:], "results3.txt", getpos=list(zip(treesinter, treesdecl))[-20:], my=True)
