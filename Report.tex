@@ -617,16 +617,37 @@ derivation.
 
 \label{sec:implem}
 
-\section{Evaluation}
+\section{Preliminary evaluation}
 \label{sec:eval}
 
-Exact surface form matches, since the task is intuitively easy.
-Transformations in both directions.  Take (part of) WSJ treebank, e.g., all
-polar questions, transform them to declaratives by hand, parse with standard
-treebank parser, transform with implementation, and count percentage of
-matching transformed sentences with gold standard.
+%Exact surface form matches, since the task is intuitively easy.
+%Transformations in both directions.  Take (part of) WSJ treebank, e.g., all
+%polar questions, transform them to declaratives by hand, parse with standard
+%treebank parser, transform with implementation, and count percentage of
+%matching transformed sentences with gold standard.
+%
+%TBD. 
 
-TBD. 
+The corpus we evaluate on consists of 187 exemplars of declarative sentences
+paired with interrogative sentences. Half of these were interrogative sentences
+found in the Wall Street Journal (WSJ) corpus, and the other half declarative
+sentences from the same corpus. These sentences were then transformed by hand,
+and fed to the Stanford parser to obtain parse trees. The resulting parse trees
+were manually `corrected' so as to conform to the corresponding tree from the
+WSJ. The corpus has 33 unique S productions, and 91 unique SQ productions.
+
+Evaluation is done on lemmatized versions of the resulting surface forms, and
+contractions are expanded.  Words and POS tags of the test set were added to the
+training corpus to avoid problems with unseen words. The following table shows
+the results of ten-fold testing (with test sets of 20 sentences):
+
+\begin{tabular}{ r l l }
+\hline\hline
+				& DOT	  & partial subtrees \\
+decl $\rightarrow$ inter 	& 27 \%	  & 40.5 \% (62.5 \% if lower ranking matches are counted) \\
+inter $\rightarrow$ decl 	& 21.5 \% & 47 \% (69.5 \% if lower ranking matches are counted) \\
+\hline
+\end{tabular}
 
 \section{Conclusion}
 
