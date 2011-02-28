@@ -1,20 +1,25 @@
 from bitpar import BitParChartParser
 from memoize import memoize
-from nltk import Tree, WeightedProduction, WeightedGrammar,\
+from nltk import Tree, WeightedProduction, WeightedGrammar, edit_distance, \
 	ViterbiParser, FreqDist, WordNetLemmatizer, Nonterminal, ImmutableTree
+from nltk.metrics import f_measure, precision, recall
 from itertools import chain, combinations, product, permutations
+from math import log
 from operator import mul
 from collections import defaultdict
+from random import sample
 from sys import argv
 from heapq import heappush, heappop, nlargest
+from numpy import std, mean
 USE_LEMMATIZATION = True
 # number of partial subtree matches to consider:
 NUM_PARTIAL = 10
 # whether to make sure a substitution is allowed on the target side (otherwise only the source side is checked)
 global CHECK_SUBSTITUTION
-CHECK_SUBSTITUTION = False
+CHECK_SUBSTITUTION = True
 wnl = WordNetLemmatizer() 
 
+# [3~{(S=#i[P=0.25] #1=(NP=#i[P=1] mary)(VP=#i[P=0.5] #2=(VB=#i[P=1] walks) #3=(RB=#i[P=1] quickly)))#i(S=#i[P=0.25] #1(S1=#i[P=0.5](VP=#i[P=0.5] #2) #3))}
 current_id = 1
 def topdownparse(grammar, sent, root="top"):
 	# Roark's Fully-Connected Parsing Algorithm
@@ -63,7 +68,7 @@ def mytopdownparse(grammar, sent, t=None, depth=1, depthlimit=3):
 			else: nonrec.append(a)
 		for x in nonrec:
 			t1 = join(t, production_to_tree(x))
-			if t1.leaves() <> sent[:len(t1.leaves())]: continue
+			if t1.leaves() != sent[:len(t1.leaves())]: continue
 			grammar._lhs_index[leftmost].remove(x)
 			grammar._lhs_index[leftmost].append(x)
 			for a, p in mytopdownparse(grammar, sent[len(t1.leaves()):], 
@@ -71,7 +76,7 @@ def mytopdownparse(grammar, sent, t=None, depth=1, depthlimit=3):
 				yield a, x.prob() * p
 		for x in rec:
 			t1 = join(t, production_to_tree(x))
-			if t1.leaves() <> sent[:len(t1.leaves())]: continue
+			if t1.leaves() != sent[:len(t1.leaves())]: continue
 			grammar._lhs_index[leftmost].remove(x)
 			grammar._lhs_index[leftmost].append(x)
 			for a, p in mytopdownparse(grammar, sent[len(t1.leaves()):], 
@@ -210,7 +215,7 @@ class TransformationDOP:
 			for idx in candidate.treepositions():
 				try:
 					if tree[idx] == candidate[idx]: continue
-					if tree[idx].node <> candidate[idx].node: return False
+					if tree[idx].node != candidate[idx].node: return False
 					if len(candidate[idx]) not in (0, len(tree[idx])): 
 						return False
 				except: return False
@@ -332,7 +337,7 @@ class TransformationDOP:
 						del links[idx]
 						newtree[idx] = tree[oldidx]
 						# remove the node we just inserted and all of its children, and its parent
-						indices = [a for a in indices if a[:len(oldidx)] <> oldidx and a <> oldidx[:-1]]
+						indices = [a for a in indices if a[:len(oldidx)] != oldidx and a != oldidx[:-1]]
 						nodes = [tree[a].node for a in indices]
 						covered.append(node)
 				if not covered: continue
@@ -360,17 +365,29 @@ class TransformationDOP:
 			candidates = self.grammardict[top_production].items()
 		elif smoothing:
 			if verbose: print "not found", top_production
-			candidates = [((production_to_tree(top_production), range(len([a for a in tree if isinstance(a, Tree)]))), 1)]
+			candidates = [((production_to_tree(top_production), [n for n,a in enumerate(a for a in tree if isinstance(a, Tree))]), 1.)]
 		else: 
 			if verbose: print "not found", top_production
 			raise StopIteration
-		lhscount = self.fd.get(top_production.lhs(), 1)
+		#this lookup shouldn't fail silently
+		if top_production.lhs() in self.fd:
+			lhscount = self.fd[top_production.lhs()]
+		else: raise ValueError(" %s not in fd " % top_production.lhs())
+		#new_subtree_forest = list(product(*(self.get_mlt_deriv_multi(a, smoothing, verbose) for a in tree if isinstance(a, Tree))))
 		new_subtree_forest = list(product(*(self.get_mlt_deriv_multi(a, smoothing, verbose) for a in tree if isinstance(a, Tree))))
-
+		if verbose:
+			print "subtree forest"
+			for a in new_subtree_forest:
+				if not a: continue
+				print "<",
+				for b in a: print b
+				print ">"
+		yielded = False
 		# Add new subtrees
 		for (righttree, links), count in candidates:
 			#if verbose: print "using", righttree, "for", tree
-			prob = count / lhscount
+			prob = log(count / lhscount)
+			assert(count > 0)
 			frontiers = frontier_nodes(righttree)
 			for new_subtrees in new_subtree_forest:
 				target = Tree.convert(righttree)
@@ -379,24 +396,46 @@ class TransformationDOP:
 					match = (new_subtrees[n][0].node == target[frontiers[index][1]].node)
 					if not CHECK_SUBSTITUTION or match:
 						target[frontiers[index][1]] = new_subtrees[n][0]
-						#if verbose: print "substituted", new_subtrees[n][0]
+						if verbose: print "substituted", new_subtrees[n][0]
 					else:
-						if verbose: print new_subtrees[n][0], "does not fit with", target, "source", tree
+						if verbose: 
+							print new_subtrees[n][0], "does not fit with", target, "source", tree
+							print "candidates", candidates
 						break
-					if not match: prob *= 0.01	#penalty for incorrect label
+					if not match: prob -= 4		#penalty for incorrect label
 				else:
-					prob *= reduce(mul, (a[1] for a in new_subtrees), 1)
+					prob += sum(prob for a,prob in new_subtrees)
 					yield target, prob
+					yielded = True
+		if smoothing and not yielded:
+			righttree, links, count = production_to_tree(top_production), [n for n,a in enumerate(a for a in tree if isinstance(a, Tree))], 0.5
+			#if verbose: print "using", righttree, "for", tree
+			prob = log(count / lhscount)
+			assert(count > 0)
+			frontiers = frontier_nodes(righttree)
+			for new_subtrees in new_subtree_forest:
+				target = Tree.convert(righttree)
+				for n, index in enumerate(links):
+					# check if substitution is on a matching node, 
+					match = (new_subtrees[n][0].node == target[frontiers[index][1]].node)
+					if not CHECK_SUBSTITUTION or match:
+						target[frontiers[index][1]] = new_subtrees[n][0]
+						if verbose: print "substituted", new_subtrees[n][0]
+					else:
+						if verbose: 
+							print new_subtrees[n][0], "does not fit with", target, "source", tree
+							print "candidates", candidates
+						break
+					if not match: prob -= 4		#penalty for incorrect label
+				else:
+					prob += sum(prob for a,prob in new_subtrees)
+					yield target, prob
+					yielded = True
 				
 	def get_mlt_deriv(self, tree, smoothing=False):
 		# Returns the most likely transformation of tree (based on the most likely derivation).
 		top_production = tree.productions()[0]
 
-		# Finds the most likely right hand side of top-production
-		"""count = 0
-		for (curtree, curlinks), curcount in self.grammardict[top_production].items():
-			if curcount > count:
-				righttree, links, count = curtree, curlinks, curcount"""
 		if top_production in self.grammardict:
 			#righttree, links = self.grammardict[top_production].max()
 			candidates = self.grammardict[top_production].items()
@@ -434,10 +473,12 @@ def minimal_linked_subtrees(tree1, tree2, decorate=True):
 		# nodes have them, so that lemmatized subtrees are recognized as equivalent.
 		if len(tree1) == len(tree2):
 			if isinstance(tree1, Tree) and isinstance(tree2, Tree):
-				if tree1.node.split("@")[-1] == tree2.node.split("@")[-1]:
+				if (tree1.node.split("@")[-1] == tree2.node.split("@")[-1] 
+					or (tree1.node.split("!")[0] in ('s', 'sq', 'S', 'SQ')
+					and tree2.node.split("!")[0] in ('s', 'sq', 'S', 'SQ'))):
 					return "@" in tree1.node or all(ideq(a,b) for a,b in zip(tree1, tree2))
 				else: return False
-			else: return tree1 == tree2
+			else: return isinstance(tree1, str) and isinstance(tree2, str) and tree1.lower() == tree2.lower()
 		else: return False
 	shared_subtrees = True # Are there any shared subtrees?
 	linked_subtrees = []
@@ -456,7 +497,7 @@ def minimal_linked_subtrees(tree1, tree2, decorate=True):
 					# check if larger than current maximal tree, etc.
 					if len(leaves_and_frontier_nodes(i)) > max_shared_subtree_size:
 						max_shared_subtree_size = len(leaves_and_frontier_nodes(i))
-						max_shared_subtree = (i, parent1, num1, parent2, num2)
+						max_shared_subtree = (i, j, parent1, num1, parent2, num2)
 
 		# If no subtree is found yet, find an 'almost-match' (e.g. a
 		# conjugation)
@@ -467,11 +508,11 @@ def minimal_linked_subtrees(tree1, tree2, decorate=True):
 						if isinstance(j, Tree) and	len(j) == 1 and type(j[0]) == str:
 							# verbs are handled by the wordnet lemmatizer,
 							# handle contractions as special cases.
-							if ((((i.node[0] == 'v' and j.node[0] == 'v') or
-								(i.node == 'md' and j.node == 'md'))
+							if ((((i.node[0] in 'vV' and j.node[0] in 'vV') or
+								(i.node in ('md', 'MD') and j.node in ('md','MD')))
 							and (wnl.lemmatize(i[0], 'v') == wnl.lemmatize(j[0], 'v')
-							or (i[0] in ("is", "'s") and j[0] in ("is", "'s") and i[0] <> j[0])))
-							or (i[0] in ("not", "n't") and j[0] in ("not", "n't") and i[0] <> j[0])):
+							or (i[0] in ("is", "'s") and j[0] in ("is", "'s") and i[0] != j[0])))
+							or (i[0] in ("not", "n't") and j[0] in ("not", "n't") and i[0] != j[0])):
 								# if word is the same it's probably a tagging error:
 								if i[0] == j[0]: 
 									pass
@@ -484,14 +525,14 @@ def minimal_linked_subtrees(tree1, tree2, decorate=True):
 
 		# Remove the shared subtree from the tree...
 		if max_shared_subtree:
-			(tree, parent1, num1, parent2, num2) = max_shared_subtree
+			(i, j, parent1, num1, parent2, num2) = max_shared_subtree
 			# Decorate tree with ids.
-			if decorate: tree = decorate_with_ids(tree)
-			parent1[num1] = Tree(tree.node, []) # tree.node
-			parent2[num2] = Tree(tree.node, []) # tree.node
+			if decorate: i, j = decorate_with_ids(i, j)
+			parent1[num1] = Tree(i.node, []) # tree.node
+			parent2[num2] = Tree(j.node, []) # tree.node
 		elif lemmatized_equivalents:
 			(i, j, parent1, num1, parent2, num2) = lemmatized_equivalents
-			i, j = decorate_pair(i, j)
+			if decorate: i, j = decorate_pair(i, j)
 			parent1[num1] = Tree(i.node, [])
 			parent2[num2] = Tree(j.node, [])
 		
@@ -500,19 +541,15 @@ def minimal_linked_subtrees(tree1, tree2, decorate=True):
 		elif max_shared_subtree == None:
 			shared_subtrees = False
 		else:
-			linked_subtrees.append(tree)
-	#print "Phase -1"
+			linked_subtrees.append((i, j))
 	# Decompose linked subtrees into minimal subtrees (so far: these always are
 	# PCFG-rules)
 	minimal_subtrees = []
-	for i in linked_subtrees:
-		for j in i.productions():
-			if len(j.rhs()) > 0:
+	for a,b in linked_subtrees:
+		for i,j in zip(a.productions(), b.productions()):
+			if len(i.rhs()) > 0:
 				minimal_subtrees.append(
-					(production_to_tree(j), production_to_tree(j)))
-	#print "Phase 0"
-	#for (x, y) in equivalents:
-	#	minimal_subtrees.append((x, y))
+					(production_to_tree(i), production_to_tree(j)))
 	minimal_subtrees.extend(equivalents)
 
 	minimal_subtrees.append((tree1, tree2))
@@ -615,7 +652,7 @@ def munge(deriv, tree, notcovered):
 		if idx: deriv[idx] = Tree.convert(guessorder(deriv[idx], tree, nc))
 		else: deriv = Tree.convert(guessorder(deriv[idx], tree, nc))
 		# remove this node and all of its children as we've covered them now
-		notcovered = [x for x in notcovered if x[:len(nc)] <> nc]
+		notcovered = [x for x in notcovered if x[:len(nc)] != nc]
 	return deriv
 def guessorder(deriv, tree, notcovered):
 	def partition(list, middle):
@@ -661,6 +698,7 @@ def count(our_node, linked_subtrees):
 		if a.node == our_node:
 			return reduce(mul, (count(c, linked_subtrees) + 1 for
 				c in set(x for x,y in frontier_nodes(a))), 1)
+	raise ValueError("node %s not found in linked subtrees" % our_node)
 	return -1
 
 def frontier_nodes(tree):
@@ -698,14 +736,16 @@ def sublists(l):
 def rmid(x):
 	return x.split("@")[0]
 
-def decorate_with_ids(tree):
+def decorate_with_ids(tree1, tree2):
 	global current_id
-	utree = tree.copy(True)
-	for a in utree.subtrees():
-		if not ("@" in a.node):
+	utree1 = tree1.copy(True)
+	utree2 = tree2.copy(True)
+	for a, b in zip(utree1.subtrees(), utree2.subtrees()):
+		if not ("@" in a.node):		# ????!
 			a.node = "%s@%d" % (a.node, current_id)
+			b.node = "%s@%d" % (b.node, current_id)
 			current_id += 1
-	return utree
+	return utree1, utree2
 
 def undecorate_with_ids(tree):
 	tree = Tree.convert(tree)
@@ -720,7 +760,7 @@ def decorate_pair(tree1, tree2):
 	utree1.node = "%s@%d" % (utree1.node, current_id)
 	utree2.node = "%s@%d" % (utree2.node, current_id)
 	current_id += 1
-	return (utree1, utree2)
+	return utree1, utree2
 
 def treeify(node):
 	if type(node) == Nonterminal:
@@ -816,6 +856,29 @@ def removeforcepos(tree):
 			result[a[:-1]] = tree[a]
 	return result
 
+def remcnfmarks(tree):
+	for a in tree.subtrees(filter=lambda x: '!<>' in x.node):
+		a.node = a.node.replace('!<>', '')
+def foldlabels(tree):
+	for a in tree.subtrees(filter=lambda x: x.height() > 2 and x.node.lower() not in "top s sq smain vp np".split()):
+		a.node = "X"
+def mark_be_do(tree):
+	#for preterminal in tree.subtrees(filter=lambda x: x.height() == 2):
+	if tree[0].node == "S": tree[0].node = "Smain"
+	for a in tree.treepositions():
+		if isinstance(tree[a], Tree) and tree[a].height() == 2: preterminal = tree[a]
+		else: continue
+		if preterminal.node.lower() == "md":
+				tree[a[:-1]].node += "-md"
+		if preterminal.node.lower() in "vb vbz vbd vbp".split():
+			if wnl.lemmatize(preterminal[0].lower(), "v") == "be":
+				preterminal.node += "-be"
+				tree[a[:-1]].node += "-be"
+			elif wnl.lemmatize(preterminal[0].lower(), "v") == "do":
+				preterminal.node += "-do"
+			elif wnl.lemmatize(preterminal[0].lower(), "v") == "have":
+				preterminal.node += "-have"
+
 def interface():
 	corpus = """(S (NP John) (VP (V bought) (NP (DT a) (N car))))
 	(S (VP (VBZ did)) (NP John) (VP (V buy) (NP (DT a) (N car))))
@@ -843,7 +906,9 @@ def interface():
 		tdop.add_to_grammar(l)
 		tdop.add_to_grammar(linked_subtrees_to_probabilistic_rules(minimal_linked_subtrees(tree1, tree2)))
 	tdop.sort_grammar()
-	parser = ViterbiParser(tdop.get_grammar(root="s"))
+	#parser = ViterbiParser(tdop.get_grammar(root="s"))
+	grammar, lexicon = tdop.get_grammar(bitpar=True)
+	parser = BitParChartParser(grammar, lexicon, rootsymbol="s", n=1000)
 	grammar = tdop.get_my_grammar(root="s")
 	myparser = ViterbiParser(grammar)
 	print 'done'
@@ -858,7 +923,7 @@ def interface():
 		#	if n > 3: break
 		#	print "top down", result[0], result[1]
 		try:
-			parsetree = parser.parse(a.split())
+			parsetree = removeforcepos(list(parser.nbest_parse(a.split()))[0])
 			print "viterbi1:", parsetree
 		except Exception as e:
 			print e
@@ -874,18 +939,18 @@ def interface():
 		except Exception as e:
 			print e
 		if myparsetree in (None, []): continue
-		for transformed, prob in list(tdop.my_mlt_deriv(myparsetree)):
+		for transformed, prob in list(tdop.my_mlt_deriv(myparsetree, allowpartial=True)):
 			print "transformed2 (prob=%s): %s" % (repr(prob), transformed)
 			print "words:", " ".join(transformed.leaves())
 
-def run(tdop, sentsortrees, gold, resultsfile, trees=False, my=False):
+def run(tdop, sentsortrees, gold, resultsfile, trees=False, my=False, bootstrap=False):
 	if not trees:
 		#parser = ViterbiParser(tdop.get_grammar(root="top"))
 		if my:
 			rules, lexicon = tdop.get_my_grammar(bitpar=True)
 		else:
 			rules, lexicon = tdop.get_grammar(bitpar=True, freqfn=sum)
-		parser = BitParChartParser(rules, lexicon, cleanup=True, rootsymbol="top", unknownwords="unknownwords", n=1000)
+		parser = BitParChartParser(rules, lexicon, cleanup=True, rootsymbol="TOP", n=100)
 		print 'grammar done'
 	results = []
 	resultfds = []
@@ -923,75 +988,108 @@ def run(tdop, sentsortrees, gold, resultsfile, trees=False, my=False):
 						t += 1
 						resultfd.inc(" ".join(result.leaves()), count=parsetrees[b] * prob)
 						if nn > 1000: break
-					else: continue # try another parse tree
+				continue
 			for nn, (result, prob) in enumerate(tdop.get_mlt_deriv_multi(b, smoothing=True, verbose=False)):
-				if result: resultfd.inc(undecorate_with_ids(result).freeze(), count=parsetrees[b] * prob or 1e-100)
-				t += 1
-				if nn > 1000: break
-		if not trees and not resultfd and parsetrees:
-			for nn, (result, prob) in enumerate(tdop.get_mlt_deriv_multi(undecorate_with_ids(parsetrees.keys()[0]), smoothing=False, verbose=False)):
-				if result: resultfd.inc(undecorate_with_ids(result).freeze(), count=parsetrees[b] * prob or 1e-100)
-				t += 1
-				if nn > 1000: break
+				# count number of addressed nodes; the more addressed nodes, the shorter the derivation is
+				if result:
+					if bootstrap:
+						resultfd.inc(undecorate_with_ids(result).freeze(), count=parsetrees[b] * prob or 1e-200)
+					else:
+						resultfd.inc((undecorate_with_ids(result).freeze(), 
+									sum(1 for a in result.subtrees() if "@" in a.node)), 
+									count=log(parsetrees[b]) + prob) # or 1e-200)
+					t += 1
+				if nn > 100: break
+		if not trees and not resultfd and parsetrees and undecorate_with_ids(parsetrees.keys()[0]).freeze() not in parsetrees:
+			for nn, (result, prob) in enumerate(tdop.get_mlt_deriv_multi(undecorate_with_ids(parsetrees.keys()[0]), smoothing=True, verbose=False)):
+				if result and undecorate_with_ids(result).freeze() not in resultfd:
+					if bootstrap:
+						resultfd.inc(undecorate_with_ids(result).freeze(), count=parsetrees[b] * prob or 1e-200)
+					else:
+						resultfd.inc((undecorate_with_ids(result).freeze(), 
+								sum(1 for a in result.subtrees() if "@" in a.node)), 
+								count=log(parsetrees[b]) + prob) # or 1e-200)
+					t += 1
+				if nn > 100: break
 		print "transformations: ", t
-		if not trees:
-			resultfd = FreqDist(dict((" ".join(x.leaves()), y) for x,y in resultfd.items()))
+		if not trees and resultfd:
+			# order the shortest derivations by probability:
+			if bootstrap:
+				pass
+				#resultfd = FreqDist(dict((tree, prob) for (tree, n), prob in resultfd.items() if n == m))
+			else:
+				m = max(y for x,y in resultfd)
+				resultfd = FreqDist(dict((" ".join(tree.leaves()), prob) for (tree, n), prob in resultfd.items() if n == m))
 		if parsetrees and resultfd:
 			results.append("\n".join("%d. [p=%s] %s" % (n, repr(prob), words) for words, prob in resultfd.items()) + "\n")
 			print results[-1]
 		else:
-			results.append("\n")
-			#if parsetrees.keys(): print "not transformed:", parsetrees.keys()[0]
+			if parsetrees and not trees: results.append("not transformed: %s\n" % a)
+			elif not parsetrees and not trees: results.append("not parsed: %s\n" % a)
 		resultfds.append(resultfd)
 	if not trees: del parser
 	print "done"
-	from nltk import edit_distance
-	from nltk.metrics import f_measure, precision, recall
 	def lem(sent):
 		def f(a):
 			if a == "n't": return "not"
 			if a == "'s": return "is"
 			return a
-		if sent: return tuple([f(wnl.lemmatize(a, "v")) for a in sent])
+		if sent: return tuple([wnl.lemmatize(f(a), "v") for a in sent])
 		else: return sent
-	lgold = [lem(a.split()) for a in gold]
+
+	def fmax(a):
+		if a: return max(a.items(), key=lambda (k,v): v)[0]
+	if bootstrap:
+		def strtree(a):
+			if a and fmax(a): return fmax(a)._pprint_flat("","()",0) + "\n"
+			else: return "\n"
+		def strtrees(a):
+			if a: return "\n".join(x._pprint_flat("","()",0) for x in a if x) + "\n\n"
+			else: return "\n\n"
+		open(resultsfile, "w").writelines(map(strtree, resultfds))
+		open(resultsfile+"all", "w").writelines(map(strtrees, resultfds))
+		return
+
+	lgold = [lem(a.lower().split()) for a in gold]
 	a,b = 0,0
 	dist = []
 	dist1 = []
 	exact = []
 	for n, (fd, sent) in enumerate(zip(resultfds, lgold)):
-		if fd.max() and lem(fd.max().split()) == sent: 
+		if fmax(fd) and lem(fmax(fd).lower().split()) == sent:
 			a += 1
 			exact.append(n)
-		if sent in (lem(x.split()) for x in fd.keys()): b += 1
-		if fd: 
+		if sent in (lem(x.lower().split()) for x in fd.keys()): b += 1
+		if fmax(fd): 
 			dist.append(min(edit_distance(sent, lem(x.split())) for x in fd))
-			dist1.append(edit_distance(sent, lem(fd.max().split())))
+			dist1.append(edit_distance(sent, lem(fmax(fd).split())))
 		else: 
 			dist.append(len(sent))
 			dist1.append(len(sent))
+	exactcnt = sum(1 for a,b in zip(resultfds, gold) if fmax(a) == b)
 	stats = (
-	"exact match ranked first: %d of %d => %d %%\n" 
-	"exact match of any rank:  %d of %d => %d %%\n" 
-	"f-measure: %s\n" 
-	"precision: %s\n" 
-	"recall: %s\n" 
-	"average edit distance (of best matches): %f\n" 
-	"sentences with edit distance < 1: %d\n"
+	"exact match:        %d of %d => %.2f %%\n"
+	"match ranked first: %d of %d => %.2f %%\n" 
+	"match of any rank:  %d of %d => %.2f %%\n" 
+	"f-measure: %.2f\n" 
+	"precision: %.2f\n" 
+	"recall: %.2f\n" 
+	"average edit distance (of best matches): %.2f\n" 
+	"sentences with edit distance < 1: %s\n"
 	"distances of first matches: %s\n"
 	"distances of best matches:  %s\n"
 	"indices of exact matches: %s\n" % (
+			exactcnt, len(gold), float(exactcnt) / len(gold) * 100,
 			a, len(gold), float(a) / len(gold) * 100, 
 			b, len(gold), float(b) / len(gold) * 100, 
-			repr(f_measure(set(lgold), set(lem(x.max().split()) for x in resultfds if x))), 
-			repr(precision(set(lgold), set(lem(x.max().split()) for x in resultfds if x))),
-			repr(recall(set(lgold), set(lem(x.max().split()) for x in resultfds if x))), 
-			sum(dist) / float(len(dist)), 
-			len([x for x in dist1 if x <= 1]), 
+			f_measure(set(lgold), set(lem(fmax(x).lower().split()) for x in resultfds if fmax(x))),
+			precision(set(lgold), set(lem(fmax(x).lower().split()) for x in resultfds if fmax(x))),
+			recall(set(lgold), set(lem(fmax(x).lower().split()) for x in resultfds if fmax(x))), 
+			mean(dist), sum(1 for x in dist1 if x <= 1), 
 			repr(dist1), repr(dist), repr(exact)))
 	if not trees:
 		stats += "sentences with no parse: %d\n" % noparse
-	stats += "sentences with no transformation: %d\n" % len([x for x in resultfds if not x])
+	stats += "sentences with no transformation: %d\n" % sum(1 for x in resultfds if not x)
 	print stats
 	results.append(stats)
 	open(resultsfile, "w").writelines(results)
@@ -1000,67 +1098,81 @@ def run(tdop, sentsortrees, gold, resultsfile, trees=False, my=False):
 def runexp():
 	import cPickle
 	global CHECK_SUBSTITUTION
-	sentsinter = open("corpus/sentences-interr3.txt").read().lower().splitlines()
-	sentsdecl = open("corpus/sentences-decl3.txt").read().lower().splitlines()
-	treesinter = map(lambda x: Tree(x.lower()), open("corpus/trees-interr3.txt"))
-	treesdecl = map(lambda x: Tree(x.lower()), open("corpus/trees-decl3.txt"))
+	sentsinter = open("corpus/sentences-interr3.txt").read().splitlines()
+	sentsdecl = open("corpus/sentences-decl3.txt").read().splitlines()
+	treesinter = map(lambda x: Tree(x), open("corpus/trees-interr3.txt"))
+	treesdecl = map(lambda x: Tree(x), open("corpus/trees-decl3.txt"))
 	newsentsinter = open("corpus/sentences-interr1.txt").read().lower().splitlines()
 	newsentsdecl = open("corpus/sentences-decl1.txt").read().lower().splitlines()
-	newtreesdecl = map(lambda x: Tree(x.lower()), open("corpus/trees-decl1.txt"))
-	newtreesinter = map(lambda x: Tree(x.lower()), open("corpus/trees-interr1.txt"))
+	newtreesdecl = map(lambda x: Tree(x), open("corpus/trees-decl1.txt"))
+	newtreesinter = map(lambda x: Tree(x), open("corpus/trees-interr1.txt"))
+
+	newtrees = map(lambda x: Tree(x), open("corpus/trees-decl4.txt"))
 	trees_tdop_parsed = map(lambda x: undecorate_with_ids(Tree(x.lower())), open("trees.txt"))
 
-	#corpus = list(zip(treesdecl, treesinter))[:-20]
-	# binarization of corpus. initial testing indicates it only lowers scores.
-	def remcnfmarks(tree):
-		for a in tree.subtrees(filter=lambda x: '|<>' in x.node):
-			a.node = a.node.replace('|<>', '')
-	def foldlabels(tree):
-		for a in tree.subtrees(filter=lambda x: x.height() > 2 and x.node not in "s sq top np vp".split()):
-			a.node = "X"
-	def mark_be_do(tree):
-		for preterminal in tree.subtrees(filter=lambda x: x.height() == 2):
-			if preterminal.node in "vb vbz vbd vbp".split():
-				if wnl.lemmatize(preterminal[0], "v") == "be":
-					preterminal.node += "_be"
-				elif wnl.lemmatize(preterminal[0], "v") == "do":
-					preterminal.node += "_do"
-
-	corpus = list(zip(newtreesdecl + treesdecl, newtreesinter + treesinter))[:-20]
-	#corpus = list(zip(treesdecl, treesinter))
+	corpus = list(zip(newtreesdecl + treesdecl, newtreesinter + treesinter))
 	#corpus = list(zip(newtreesdecl, newtreesinter))
-	for a,b in corpus:
+	for a, b in corpus:
 		pass
 		#foldlabels(a)
 		#foldlabels(b)
-		a.chomsky_normal_form(factor='left', horzMarkov=0)
-		b.chomsky_normal_form(factor='left', horzMarkov=0)
-		remcnfmarks(a)
-		remcnfmarks(b)
-		#mark_be_do(a)
-		#mark_be_do(b)
-	for a in treesinter:
+		mark_be_do(a)
+		mark_be_do(b)
+		# use a different separator so as not to interfere with the
+		# binarization performed at the PCFG level for bitpar in tdop.get_grammar()
+		#a.chomsky_normal_form(factor='left', horzMarkov=0, childChar="!")
+		#b.chomsky_normal_form(factor='left', horzMarkov=0, childChar="!")
+		a.chomsky_normal_form(factor='right', horzMarkov=0, childChar="!")
+		b.chomsky_normal_form(factor='right', horzMarkov=0, childChar="!")
+		#remcnfmarks(a)
+		#remcnfmarks(b)
+	for a in newtrees:
+		#foldlabels(a)
+		#foldlabels(b)
+		mark_be_do(a)
+		mark_be_do(b)
+		#a.chomsky_normal_form(factor='left', horzMarkov=0, childChar="!")
+		#b.chomsky_normal_form(factor='left', horzMarkov=0, childChar="!")
+		a.chomsky_normal_form(factor='right', horzMarkov=0, childChar="!")
+		b.chomsky_normal_form(factor='right', horzMarkov=0, childChar="!")
+		#remcnfmarks(a)
+		#remcnfmarks(b)
+	for a,b in zip(treesdecl, treesinter):
 		pass
 		#foldlabels(a)
-		a.chomsky_normal_form(factor='left', horzMarkov=0)
-		remcnfmarks(a)
-		#mark_be_do(a)
+		#foldlabels(b)
+		mark_be_do(a)
+		mark_be_do(b)
+		#a.chomsky_normal_form(factor='left', horzMarkov=0, childChar="!")
+		#b.chomsky_normal_form(factor='left', horzMarkov=0, childChar="!")
+		a.chomsky_normal_form(factor='right', horzMarkov=0, childChar="!")
+		b.chomsky_normal_form(factor='right', horzMarkov=0, childChar="!")
+		#remcnfmarks(a)
+		#remcnfmarks(b)
+
 	train = True
 	mlsts = []
 	if train:
 		tdop = TransformationDOP()
-		for n, (tree1, tree2) in enumerate(corpus):
+		for n, (tree1, tree2) in enumerate(corpus[:-20]):
 			print n
 			#minl = minimal_linked_subtrees(tree1, tree2)
 			#pos = dict(tree2.pos())
 			#for w,p in tree1.pos():
-			#	if w in pos and pos[w] <> p:
-			#		print "%d. (%s %s) <> (%s %s)" % (n, p, w, pos[w], w)
+			#	if w in pos and pos[w] != p:
+			#		print "%d. (%s %s) != (%s %s)" % (n, p, w, pos[w], w)
 			#		print minl[-1][0], minl[-1][1]
 			#mlsts.append((n, minl[-1], (tree1, tree2), str(minl[-1][0]).count("@"), len(list(minl[-1][0].subtrees())) - 3))
 			tdop.add_to_grammar(
 				linked_subtrees_to_probabilistic_rules(
-				minimal_linked_subtrees(tree2, tree1), limit_subtrees=1000))
+				minimal_linked_subtrees(tree1, tree2), limit_subtrees=1000))
+
+		#for n, (tree1, tree2) in enumerate(zip(newtrees, newtrees), n+1):
+		#	print "newtree", n
+		#	tdop.add_to_grammar(
+		#		linked_subtrees_to_probabilistic_rules(
+		#		filter(lambda x: x[0].node.lower().split("@")[0] not in "top s sq vp TOP S SQ VP".split(), minimal_linked_subtrees(tree1, tree2)), limit_subtrees=1000))
+		# this code shows the pairs of exemplars with the least links:
 		mlsts.sort(key=lambda x: x[4] - x[3])
 		x = 0
 		for a,(b1,c1), (b,c),d,e in mlsts:
@@ -1074,24 +1186,25 @@ def runexp():
 		#print sum(x[3] for x in mlsts), "/", sum(x[4] for x in mlsts), "=", sum(x[3] for x in mlsts) / float(sum(x[4] for x in mlsts))
 		print x
 		#return
-		tdop.extendlex(zip(treesinter, treesdecl)[-20:])
-		tdop.sort_grammar(withids=False)
+		tdop.extendlex(zip(treesdecl, treesinter)[-20:])
+		#tdop.extendlex(zip(newtrees, newtrees))
+		#tdop.sort_grammar(withids=False)
 		print "training done" 
 	else:
 		#tdop = cPickle.load(open("tdop.pickle","rb"))
 		pass
-	s = [sentsinter[-20 + a] for a in (2,4,6,7,11,12,14,16)]
-	sd = [sentsdecl[-20 + a] for a in (2,4,6,7,11,12,14,16)]
 	
 	#run(tdop, trees_tdop_parsed, "results0.txt", getpos=zip(treesinter, treesdecl)[-20:], trees=True)
 	#run(tdop, sentsdecl[-20:], sentsinter[-20:], "results1.txt")
 	#run(tdop, s, sd, "results1.txt")
-	print "CHECK_SUBSTITUTION", CHECK_SUBSTITUTION
-	run(tdop, sentsinter[-20:], sentsdecl[-20:], "results1.txt")
+	#CHECK_SUBSTITUTION = False
+	#print "CHECK_SUBSTITUTION", CHECK_SUBSTITUTION
+	#run(tdop, sentsinter[-20:], sentsdecl[-20:], "results1.txt")
 
 	CHECK_SUBSTITUTION = True
 	print "CHECK_SUBSTITUTION", CHECK_SUBSTITUTION
-	run(tdop, sentsinter[-20:], sentsdecl[-20:], "results1.txt")
+	#run(tdop, [" ".join(a.leaves()) for a in newtrees], [], "trees-inter4.txt", bootstrap=True)
+	run(tdop, sentsdecl[-20:], sentsinter[-20:], "results1.txt")
 
 	#run(tdop, treesinter[-20:], sentsdecl[-20:], "results2.txt", trees=True, my=True)
 	#run(tdop, treesdecl[-20:], sentsinter[-20:], "results2.txt", trees=True, my=True)
@@ -1104,71 +1217,72 @@ def runexp():
 
 def tenfold():
 	# first corpus
-	sentsinter = open("corpus/sentences-interr3.txt").read().lower().splitlines()
-	sentsdecl = open("corpus/sentences-decl3.txt").read().lower().splitlines()
-	treesinter = map(lambda x: Tree(x.lower()), open("corpus/trees-interr3.txt"))
-	treesdecl = map(lambda x: Tree(x.lower()), open("corpus/trees-decl3.txt"))
+	sentsinter = open("corpus/sentences-interr3.txt").read().splitlines()
+	sentsdecl = open("corpus/sentences-decl3.txt").read().splitlines()
+	treesinter = map(lambda x: Tree(x), open("corpus/trees-interr3.txt"))
+	treesdecl = map(lambda x: Tree(x), open("corpus/trees-decl3.txt"))
 	# second corpus
-	sentsinter += open("corpus/sentences-interr1.txt").read().lower().splitlines()
-	sentsdecl += open("corpus/sentences-decl1.txt").read().lower().splitlines()
-	treesdecl += map(lambda x: Tree(x.lower()), open("corpus/trees-decl1.txt"))
-	treesinter += map(lambda x: Tree(x.lower()), open("corpus/trees-interr1.txt"))
-	from random import sample
+	sentsinter += open("corpus/sentences-interr1.txt").read().splitlines()
+	sentsdecl += open("corpus/sentences-decl1.txt").read().splitlines()
+	treesdecl += map(lambda x: Tree(x), open("corpus/trees-decl1.txt"))
+	treesinter += map(lambda x: Tree(x), open("corpus/trees-interr1.txt"))
 	matchesi1, matchesd1 = [], []
 	matchesi2, matchesd2 = [], []
-	def remcnfmarks(tree):
-		for a in tree.subtrees(filter=lambda x: '|<>' in x.node):
-			a.node = a.node.replace('|<>', '')
-	def foldlabels(tree):
-		for a in tree.subtrees(filter=lambda x: x.height() > 2 and x.node not in "s sq top".split()):
-			a.node = "X"
 	for a in treesinter:
-		#a.chomsky_normal_form(factor='left', horzMarkov=0)
-		#remcnfmarks(a)
-		#foldlabels(a)
+		foldlabels(a)
+		mark_be_do(a)
+		#a.chomsky_normal_form(factor='left', horzMarkov=0, childChar="!")
+		a.chomsky_normal_form(factor='right', horzMarkov=0, childChar="!")
+		remcnfmarks(a)
 		pass
 	for a in treesdecl:
-		#a.chomsky_normal_form(factor='left', horzMarkov=0)
-		#remcnfmarks(a)
-		#foldlabels(a)
+		foldlabels(a)
+		mark_be_do(a)
+		#a.chomsky_normal_form(factor='left', horzMarkov=0, childChar="!")
+		a.chomsky_normal_form(factor='right', horzMarkov=0, childChar="!")
+		remcnfmarks(a)
 		pass
 	for fold in range(10):
 		test = sample(range(len(treesdecl)), 20)
+		#test = range(len(treesdecl))[fold*10:fold*10+20]
 		train = [a for a in range(len(treesdecl)) if a not in test]
+		assert(len(treesdecl) == len(treesinter) == len(sentsinter) == len(sentsdecl))
+		assert(set(test).intersection(set(train)) == set([]))
 		corpus = [(treesdecl[a], treesinter[a]) for a in train]
 		tdop = TransformationDOP()
 		for n, (tree1, tree2) in enumerate(corpus):
 			print n
 			min = minimal_linked_subtrees(tree2, tree1)
-			lin = linked_subtrees_to_probabilistic_rules(min, limit_subtrees=1000)
+			lin = linked_subtrees_to_probabilistic_rules(min, limit_subtrees=2000)
 			tdop.add_to_grammar(lin)
 		tdop.sort_grammar(False)
 		tdop.extendlex([(treesinter[a], treesdecl[a]) for a in test])
 		print "training done" 
-		matchesi1.append(run(tdop, [treesinter[a] for a in test], [sentsdecl[a] for a in test], ("foldd%d.txt" % fold), trees=True, my=True))
-		matchesi2.append(run(tdop, [sentsinter[a] for a in test], [sentsdecl[a] for a in test], ("sfoldd%d.txt" % fold), trees=False, my=False))
+		#matchesi1.append(run(tdop, [treesinter[a] for a in test], [sentsdecl[a] for a in test], ("foldd%d.txt" % fold), trees=True, my=True))
+		matchesi2.append(run(tdop, [sentsinter[a] for a in test], [sentsdecl[a] for a in test], ("sfoldd%d.rb.txt" % fold), trees=False, my=False))
+		del tdop
 		tdop = TransformationDOP()
 		for n, (tree1, tree2) in enumerate(corpus):
 			print n
 			min = minimal_linked_subtrees(tree1, tree2)
-			lin = linked_subtrees_to_probabilistic_rules(min, limit_subtrees=1000)
+			lin = linked_subtrees_to_probabilistic_rules(min, limit_subtrees=2000)
 			tdop.add_to_grammar(lin)
 		tdop.sort_grammar(False)
 		tdop.extendlex([(treesdecl[a], treesinter[a]) for a in test])
 		print "training done" 
-		matchesd1.append(run(tdop, [treesdecl[a] for a in test], [sentsinter[a] for a in test], ("foldi%d.txt" % fold), trees=True, my=True))
-		matchesd2.append(run(tdop, [sentsdecl[a] for a in test], [sentsinter[a] for a in test], ("sfoldi%d.txt" % fold), trees=False, my=False))
-	matchesi1, matchesi1b = zip(*matchesi1)
+		#matchesd1.append(run(tdop, [treesdecl[a] for a in test], [sentsinter[a] for a in test], ("foldi%d.txt" % fold), trees=True, my=True))
+		matchesd2.append(run(tdop, [sentsdecl[a] for a in test], [sentsinter[a] for a in test], ("sfoldi%d.rb.txt" % fold), trees=False, my=False))
+		del tdop
+	#matchesi1, matchesi1b = zip(*matchesi1)
 	matchesi2, matchesi2b = zip(*matchesi2)
-	matchesd1, matchesd1b = zip(*matchesd1)
+	#matchesd1, matchesd1b = zip(*matchesd1)
 	matchesd2, matchesd2b = zip(*matchesd2)
-	from numpy import std, mean
 	print "10 folds, accuracy:"
-	print "trees:"
-	print "inter => decl:", mean(matchesi1) * 5, "%% (stddev %f) - " % std(matchesi1), 
-	print mean(matchesi1b) * 5, "%% (stddev %f)" % std(matchesi1b)
-	print "decl => inter:", mean(matchesd1) * 5, "%% (stddev %f) - " % std(matchesd1), 
-	print mean(matchesd1b) * 5, "%% (stddev %f)" % std(matchesd1b)
+	#print "trees:"
+	#print "inter => decl:", mean(matchesi1) * 5, "%% (stddev %f) - " % std(matchesi1), 
+	#print mean(matchesi1b) * 5, "%% (stddev %f)" % std(matchesi1b)
+	#print "decl => inter:", mean(matchesd1) * 5, "%% (stddev %f) - " % std(matchesd1), 
+	#print mean(matchesd1b) * 5, "%% (stddev %f)" % std(matchesd1b)
 	print
 	print "sentences:"
 	print "inter => decl:", mean(matchesi2) * 5, "%% (stddev %f) - " % std(matchesi2), 
@@ -1186,7 +1300,7 @@ def mungetest():
 		print "former result", result
 		print "former leaves:", " ".join(result.leaves())
 		newresult = munge(deriv, tree, notcovered)
-		if newresult <> result:
+		if newresult != result:
 			print "current result", newresult
 			print "current leaves:", " ".join(newresult.leaves())
 		print
