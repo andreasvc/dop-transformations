@@ -1,5 +1,5 @@
 from bitpar import BitParChartParser
-from memoize import memoize
+from nltk import memoize
 from nltk import Tree, WeightedProduction, WeightedGrammar, edit_distance, \
 	ViterbiParser, FreqDist, WordNetLemmatizer, Nonterminal, ImmutableTree
 from nltk.metrics import f_measure, precision, recall
