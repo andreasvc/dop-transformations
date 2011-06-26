@@ -49,16 +49,20 @@ def minimal_prelinked_subtrees(tree1, tree2):
 	mlst = zip(
 		sorted(tree1.subtrees(lambda t: "@" in t.node), key=lambda t: t.node),
 		sorted(tree2.subtrees(lambda t: "@" in t.node), key=lambda t: t.node))
+	mlst.append((tree1, tree2))
 
 	# remove other linked subtrees
 	newmlst = []
 	for treepair in mlst:
 		newpair = ()
-		for n,t in enumerate(treepair):
+		for n, t in enumerate(treepair):
 			m = [a[n] for a in mlst]
 			tree = t.copy(True)
-			for st in tree.subtrees(lambda t: "@" in t.node):
-				del st[:]
+			for a in tree:
+				if not isinstance(a, Tree): continue
+				for st in list(a.subtrees(lambda x: "@" in x.node))[::-1]:
+
+					del st[:]
 			newpair += (tree,)
 		newmlst.append(newpair)
 	return newmlst
@@ -91,7 +95,7 @@ def dotranslate(sent, parser, tdop):
 			if not result: continue
 			key = (undecorate_with_ids(result).freeze(),
 				sum(1 if "@" in a.node else 0 for a in result.subtrees()))
-			resultfd[key] = resultfd.setdefault(key, 0.0) + prob
+			resultfd[key] = resultfd.get(key, 0.0) + prob
 	return parsetrees, resultfd
 
 def remspaces(tree):
@@ -108,7 +112,8 @@ def getmodel(nl, sem):
 		# subtree links from that
 		tdop.add_to_grammar(
 			linked_subtrees_to_probabilistic_rules(
-				minimal_linked_subtrees(remspaces(tree1), tree2),
+				#minimal_linked_subtrees(remspaces(tree1), tree2),
+				minimal_prelinked_subtrees(remspaces(tree1), tree2),
 				limit_subtrees=1000))
 
 	rules, lexicon = tdop.get_grammar(bitpar=True, freqfn=sum)
@@ -125,9 +130,13 @@ def main():
 			print y,
 			for z in x: print z,
 		print
+	print
 
-	for n, tree1, tree2 in (): #zip(count(), nl, sem):
-		print n
+	for n, tree1, tree2 in zip(count(), nl, sem):
+		print n, 'prelinked',
+		for a,b in minimal_prelinked_subtrees(remspaces(tree1), tree2):
+			print a, "<=>", b
+		print '\nlinked',
 		for a,b in minimal_linked_subtrees(remspaces(tree1), tree2):
 			print a, "<=>", b
 

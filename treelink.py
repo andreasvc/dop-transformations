@@ -812,10 +812,9 @@ def test2():
 			print p, t
 	except Exception as e:
 		print e
-	
 
 def forcepos(tree):
-	""" make sure all terminals have POS tags; 
+	""" make sure all terminals have POS tags;
 	invent one if necessary ("parent_word") """
 	result = tree.copy(True)
 	for a in tree.treepositions('leaves'):
@@ -840,9 +839,9 @@ def foldlabels(tree, all=False):
 	for a in tree.subtrees(filter=lambda x: x.height() > 2 and x.node.lower() not in exclude):
 		a.node = "X"
 def mark_be_do(tree, vbdepth=3):
-	if tree[0].node.lower() in ("s", "sinv"): tree[0].node = "Smain"	
+	if tree[0].node.lower() in ("s", "sinv"): tree[0].node = "Smain"
 	for a in tree.treepositions():
-		if isinstance(tree[a], Tree) and tree[a].height() == 2: 
+		if isinstance(tree[a], Tree) and tree[a].height() == 2:
 			preterminal = tree[a]
 			if preterminal.node.lower() == "md" and len(a) == vbdepth:
 					tree[a[:-1]].node += "-aux"
