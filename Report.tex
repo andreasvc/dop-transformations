@@ -5,8 +5,8 @@
 \usepackage[pdftex]{graphicx}
 \usepackage[english]{babel}
 \usepackage[colorlinks=true, citecolor=black, linkcolor=black, urlcolor=blue, pdfborder={0 0 0}]{hyperref}
-\usepackage[utf8x]{inputenc}
-\usepackage{ucs}
+%\usepackage[utf8x]{inputenc}
+%\usepackage{ucs}
 \usepackage{amsmath}
 \usepackage{amsfonts}
 \usepackage{amssymb}
@@ -15,6 +15,8 @@
 \usepackage{parsetree}
 \usepackage{qtree}
 \usepackage{avm}
+\usepackage{verbatim}
+\usepackage{fullpage}
 %\usepackage{subfigure}
 \usepackage{natbib} 
 
@@ -151,30 +153,31 @@ translated language. For example:
 \ex.
 \label{johnenfr}
 %failed attempt to get <=> aligned in the middle vertically. oh well.
-\begin{tabular}{ r m{3em} l }
+
+\begin{center}
 \begin{parsetree}
-( .S.
-	( .NP. `John' )
-	( .VP.
-		( .V. `misses' )
-		( .NP. `Mary' )
+(.S.
+	(.NP. `John')
+	(.VP.
+		(.V. `misses')
+		(.NP. `Mary')
 	)
 )
 \end{parsetree}
-& $\iff$ &
+$\iff$ 
 \begin{parsetree}
-( .S.
-	( .NP. `Mary' )
-	( .VP.
-		( .V. `manque' )
-		( .PP.
-			( .P. `à' )
-			( .NP. `John' )
+(.S.
+	(.NP. `Mary')
+	(.VP.
+		(.V. `manque')
+		(.PP.
+			(.P. `\`a')
+			(.NP. `John')
 		)
 	)
 )
 \end{parsetree}
-\end{tabular}
+\end{center}
 \vspace{1em}
 
 A common analysis of \ref{johnenfr} is problematic under the original
@@ -188,7 +191,7 @@ treebank), we encounter the following pairs of trees:
 
 \ex. \label{marylike}
 
-\begin{tabular}{lll}
+\begin{center}
 \begin{parsetree}
 ( .S.
     (.NP. (.NNP. `Mary'))
@@ -196,7 +199,7 @@ treebank), we encounter the following pairs of trees:
       (.NP. (.NNS. `cars')))
 )
 \end{parsetree}
-& $\iff$ &
+$\iff$
 \begin{parsetree}
   (.SQ. (.VBD. `does')
     (.NP. (.NNP. `Mary'))
@@ -204,7 +207,7 @@ treebank), we encounter the following pairs of trees:
       (.NP. (.NNS. `cars')))
     )
 \end{parsetree}
-\end{tabular}
+\end{center}
 \vspace{1em}
 
 Again, we here are faced with a pair of sentences, where the tree structures
@@ -389,7 +392,7 @@ will attempt to use the standard PTB phrase-structure annotation and see how wel
 it works; this has the obvious advantage of the availability of large corpora such
 as the WSJ, which can complement a small, hand-annotated parallel treebank.
 
-\newpage %fixme
+%\newpage %fixme
 
 As a compromise between the impoverished PTB annotation and the rich but non-standard
 discontinuous annotation, we could consider labelling POS tags with (former) parent
@@ -611,13 +614,31 @@ target side, yield $s$.
 
 \section{Implementation}
 
-Because of complexity issues, we have decided not to compute the most probable
-joint parses of sentences, but simply compute the most probable joint
-derivation.
+%Because of complexity issues, we have decided not to compute the most probable
+%joint parses of sentences, but simply compute the most probable joint
+%derivation.
+
+In order to discover the subtrees in pairs of exemplars, we use a simple
+algorithm to automaticallly discover links. At each step the largest subtree
+which occurs on both sides is sought, and removed from the tree pair after
+noting the link. This process is repeated until the trees can no longer be
+decomposed, after which the last fragment containing a top production remains.
+To increase the number of links that can be found, lemmatization of verbs has
+been added.
+
+To approximate the most probable joint parse we use the 1000 most probable
+viterbi derivations, summing equivalent trees. Next all possible translations
+of each tree are produced; this step can produce multiple translations for each
+derivation. Again we sum over equivalent trees, but this time only
+after first removing the node addresses added by the Goodman-like reduction.
+The translation with the highest joint probability is then selected by
+multiplying the derivation and translation probability for each tree. The
+probabilities during translation are stored as log probabilities to avoid
+underflow.
 
 \label{sec:implem}
 
-\section{Preliminary evaluation}
+\section{Evaluation}
 \label{sec:eval}
 
 %Exact surface form matches, since the task is intuitively easy.
@@ -628,32 +649,147 @@ derivation.
 %
 %TBD. 
 
-The corpus we evaluate on consists of 187 exemplars of declarative sentences
-paired with interrogative sentences. Half of these were interrogative sentences
-found in the Wall Street Journal (WSJ) corpus, and the other half declarative
-sentences from the same corpus. These sentences were then transformed by hand,
-and fed to the Stanford parser to obtain parse trees. The resulting parse trees
-were manually `corrected' so as to conform to the corresponding tree from the
-WSJ. The corpus has 33 unique S productions, and 91 unique SQ productions.
+To test the soundness of the approach, the model was first applied to a toy
+corpus. This corpus is meant to show that so-called complex declaratives can be
+transformed without problem.
 
-Evaluation is done on lemmatized versions of the resulting surface forms, and
-contractions are expanded.  Words and POS tags of the test set were added to the
+\begin{center}
+\begin{parsetree}
+( .S.
+    (.NP. `Mary')
+    (.VP. (.VBZ. `is')
+	(.ADJP. (.JJ. `happy')))
+)
+\end{parsetree}
+\begin{parsetree}
+( .SQ.
+    (.VBZ. `is')
+    (.NP. `Mary')
+    (.ADJP. (.JJ. `happy'))
+)
+\end{parsetree}
+\end{center}
+
+\begin{parsetree}
+\pthorgap{2pt}
+\ptvergap{4pt}
+( .S.
+	(.NP. (.NP. `John')
+		(.SBAR. 
+			(.WHNP. `who')
+			(.VP. (.VBZ. `is') (.VP. (.VBG. `sleeping')))))
+	(.VP. (.VBZ. `dreams') (.PP. (.IN. `about') (.NP. `unicorns')))
+)
+\end{parsetree}
+\begin{parsetree}
+\pthorgap{2pt}
+\ptvergap{4pt}
+( .SQ.
+	(.VBZ. `Does')
+	(.NP. (.NP. `John')
+		(.SBAR. (.WHNP. `who')
+			(.VP. (.VBZ. `is') (.VP. (.VBG. `sleeping')))))
+	(.VP. (.VB. `dream') (.PP. (.IN. `about') (.NP. `unicorns')))
+)
+\end{parsetree}
+\\
+
+Using this corpus, we can transform the following novel sentence:
+
+\ex. Mary who is sleeping is happy $\iff$ Is Mary who is sleeping happy
+
+This is the paradigm case of a syntactic phenomenon that is claimed to be
+unlearnable from data. Children are said to have no reason to prefer movement
+of the second occurrence of `is,' rather than the first. However, with these two
+exemplars we can already transform this sentence with two occurrences of `is'
+correctly, thus accounting for auxiliary fronting.
+
+As the transformations can be modelled in both directions, both of the
+following trees can be produced, when the words of the other are provided:
+\\
+
+\begin{parsetree}
+\pthorgap{4pt}
+\ptvergap{4pt}
+(.S.
+  (.NP.
+    (.NP. `mary')
+    (.SBAR.
+      (.WHNP. `who')
+      (.VP. (.VBZ. `is') (.VP. (.VBG. `sleeping')))))
+  (.VBZ. `is')
+  (.ADJP. (.JJ. `happy')))
+\end{parsetree}
+\begin{parsetree}
+\pthorgap{4pt}
+\ptvergap{4pt}
+(.SQ.
+  (.VBZ. `is')
+  (.NP.
+    (.NP. `mary')
+    (.SBAR.
+      (.WHNP. `who')
+      (.VP. (.VBZ. `is') (.VP. (.VBG. `sleeping')))))
+  (.ADJP. (.JJ. `happy')))
+\end{parsetree} \\
+
+
+The corpus we evaluate on consists of 185 exemplars of declarative sentences
+paired with interrogative sentences. Roughly half of these were interrogative
+sentences found in the Wall Street Journal (WSJ) corpus, and the other half
+declarative sentences from the same corpus. It is noteworthy that nearly all of
+the polar questions in the WSJ were included. These sentences were
+transformed by hand, and fed to the Stanford parser to obtain parse trees. The
+resulting parse trees were manually `corrected' so as to conform to the
+corresponding trees from the WSJ. 
+
+The corpus has 32 types of (top-level) S productions, and 81 types of SQ
+productions.  Especially the latter is problematic, as these 81 productions
+include 58 productions occurring only once. If any of these 58 occur in the
+test set then the model doesn't stand a chance, because the smallest fragment
+in a DOP model is a CFG rule. This gives us an expected minimum error rate
+of $ 58 / 185 = 31\% $.
+
+For the S productions the hapaxes were all attributable to punctuation (e.g., 
+S~$\rightarrow$~``~FRAG~,~''~NP~VP~.). The hapaxes for SQ were more varied,
+such as SQ~$\rightarrow$~CC~VBD~NP~VP~.  In effect, for every type of S
+production an SQ production is generated for every kind of top-level VP
+production, since the VP is flattened in case of aux-fronting. This is a form
+of sparsity that is dictated by the formalism of context-free
+phrase-structures.
+
+Evaluation is done on the resulting surface forms, after lemmatizing verbs and
+expanding contractions.  Words and POS tags of the test set were added to the
 training corpus to avoid problems with unseen words. The following table shows
 the results of ten-fold testing (with test sets of 20 sentences):
 
+\vspace{1em}
+\begin{center}
 \begin{tabular}{ r l l }
 \hline\hline
-				& DOT	  & partial subtrees \\
-decl $\rightarrow$ inter 	& 27 \%	  & 40.5 \% (62.5 \% if lower ranking matches are counted) \\
-inter $\rightarrow$ decl 	& 21.5 \% & 47 \% (69.5 \% if lower ranking matches are counted) \\
+				& original trees & right branching \\
+decl $\rightarrow$ inter 	& 45.0 \% 	& 62.0 \%  \\
+inter $\rightarrow$ decl 	& 46.0 \% 	& 54.0 \%  \\
 \hline
 \end{tabular}
+\end{center}
+\vspace{1em}
+
+% evaluate trees?
+
+To increase the coverage, a number of modifications were tried:
+
+\begin{itemize}
+\item Smoothing: when during translation any structure is not found, it is assumed that it is equal to its translation, with a count of 1. Also, when none of
+	the target trees can be used during translation (in case of an incompatible label blocking substitution), the same smoothing is applied.
+\item Annotating the POS tags of `to be,' `to have' and their parent nodes with an AUX feature, to distinguish them from regular verbs.
+\item Binarization, both left and right branching, with and without markings.
+\item Folding labels of constituents other than TOP, S, SQ, VP and NP, by relabeling them to X.
+\end{itemize}
 
 \section{Conclusion}
-
-TBD.
-
 \label{sec:conc}
+TBD.
 
 
 \addcontentsline{toc}{section}{\numberline{5}References}
@@ -669,7 +805,7 @@ TBD.
 
 %This reference should have some experiments with childes data to parse
 %interrogatives based on declaratives etc.
-%\bibitem[Bo]{Bo} Bod, Rense. A linguistic investigation into unsupervised DOP
+%\bibitem[Bo]{Bo} Bod, Rens. A linguistic investigation into unsupervised DOP
 
 comments & todo items go here . . .
 

@@ -6,7 +6,7 @@
 (TOP (SQ (SQ (VBZ Does) (NP (DT this) (NN team)) (VP (VB have) (NP (NP (DT a) (JJ viable) (NN strategy)) (PP (IN for) (S (VP (VBG improving) (NP (NN shareholder) (NNS values)))))))) (, ,) (CC and) (SQ (VBZ does) (NP (DT this) (NN strategy)) (VP (VB require) (NP (NN implementation)) (PP (IN over) (NP (DT an) (VBN extended) (NN period))))) (. ?)))
 (TOP (SQ (MD Will) (NP (NP (DT the) (NN adoption)) (PP (IN of) (NP (NP (DT this) (JJ particular) (NN form)) (PP (IN of) (NP (DT a) (NN poison) (NN pill)))))) (VP (ADVP (RB significantly)) (VB improve) (NP (DT the) (NNS chances) (SBAR (IN for) (S (NP (NN management)) (VP (TO to) (VP (VB carry) (PRT (RP out)) (NP (DT this) (NN strategy)))))))) (. ?)))
 (TOP (SQ (VBP Do) (NP (PRP they)) (VP (VB want) (NP (DT the) (NN spotlight)) (PP (PP (IN for) (NP (PRP themselves))) (CC or) (PP (IN for) (NP (PRP$ their) (NN cause))))) (. ?)))
-(TOP (SQ (VBZ Is) (NP (DT the) (NN trouble)) (ADVP (RP over)) (. ?)))
+(TOP (SQ (VBZ Is) (NP (DT the) (NN trouble)) (ADVP (RB over)) (. ?)))
 (TOP (SQ (MD Can) (NP (NP (NNP Sihanouk)) (CC and) (NP (NNP Hun) (NNP Sen))) (VP (VB knock) (PRT (RP off)) (NP (NP (DT the) (NNP Khmer) (NNP Rouge)) (VP (ADVP (RB still)) (VBN supported) (PP (IN by) (NP (NNP China)))))) (. ?)))
 (TOP (SQ (MD Would) (RB n't) (NP (DT the) (NNP Japanese)) (VP (VB like) (NP (NP (DT a) (NN piece)) (PP (IN of) (NP (PRP it))))) (. ?)))
 (TOP (SQ (VBZ Is) (NP (NN somebody)) (VP (VBG telling) (NP (PRP us)) (NP (NN something))) (. ?)))
